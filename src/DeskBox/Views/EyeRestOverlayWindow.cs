@@ -324,9 +324,10 @@ internal sealed class EyeRestOverlayWindow
     /// Close guarded on every path: a topology change can already be tearing
     /// the window down (the XAML island dies with its monitor), and calling
     /// into a half-dead island is exactly where the engine raises stowed
-    /// exceptions.
+    /// exceptions. Internal (not private) because the EyeRestOverlay manager
+    /// owns the registry and calls this from CloseAll.
     /// </summary>
-    private void CloseWindowQuietly()
+    internal void CloseWindowQuietly()
     {
         if (_closed)
         {

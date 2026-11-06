@@ -35,14 +35,14 @@ internal sealed class EyeRestRuntime(
 
         if (!settings.ShouldRun && !forceActive)
         {
-            if (Current is { } current)
+            if (Current is { } retiringSession)
             {
                 // Route the disable through the session's own refresh before
                 // retiring it: Refresh ends a running break (its BreakEnded
                 // event closes the overlay) and stops the timer, while a
                 // direct retire would strand a covering overlay with a dead
                 // session whose skip path no longer exists.
-                current.Refresh(settings);
+                retiringSession.Refresh(settings);
             }
 
             Retire();
