@@ -56,12 +56,13 @@ internal static class EyeRestOverlay
     /// Covers every attached monitor with the break overlay. A topology change
     /// during the break retires the overlays at once (an overlay positioned on
     /// a monitor being reconfigured would sit on stale coordinates or die with
-    /// the monitor). The background and the card surface are resolved by the
-    /// caller once per break so every monitor shows the same image (a folder
-    /// mode re-rolls per break, not per monitor) and the same appearance. The
-    /// first live overlay takes keyboard focus so the Enter/Space resume
-    /// shortcut works without clicking (Focust focuses its primary prompt
-    /// window for the same reason).
+    /// the monitor). The background and the surface are resolved by the caller
+    /// once per break: image backgrounds decode once and are shared by every
+    /// monitor (a folder mode re-rolls per break, not per monitor), and every
+    /// monitor carries the same appearance. The first live overlay takes
+    /// keyboard focus (forcibly claimed across the Windows foreground lock) so
+    /// the Enter/Space resume shortcut works without clicking (Focust focuses
+    /// its primary prompt window for the same reason).
     /// </summary>
     public static void ShowAll(
         EyeRestBreakKind kind,
@@ -85,13 +86,25 @@ internal static class EyeRestOverlay
         }
 
         EyeRestOverlayWindow? primary = null;
-        foreach (WidgetScreenInfo screen in WidgetScreenCatalog.Capture())
+        List<WidgetScreenInfo> screens = [.. WidgetScreenCatalog.Capture()];
+        // One decode per break shared by every monitor's overlay, bounded to
+        // the widest monitor so each window renders 1:1 — per-window decodes
+        // would multiply the decoded-bitmap budget for no quality gain.
+        int decodeWidth = screens.Count > 0
+            ? screens.Max(screen => screen.Monitor.Width)
+            : 0;
+        BitmapImage? backgroundSource = background.IsImage &&
+            !string.IsNullOrWhiteSpace(background.ImagePath)
+                ? CreateBackgroundSource(background.ImagePath!, decodeWidth)
+                : null;
+        foreach (WidgetScreenInfo screen in screens)
         {
             var overlay = new EyeRestOverlayWindow(
                 kind,
                 duration,
                 background,
                 surface,
+                backgroundSource,
                 screen.Monitor,
                 localization,
                 () => RequestSkip(skipRequested),
@@ -102,6 +115,41 @@ internal static class EyeRestOverlay
             }
 
             primary ??= overlay;
+        }
+    }
+
+    /// <summary>
+    /// Decodes the break background once, bounded to the widest monitor's
+    /// physical width, streaming through the loader that keeps the source out
+    /// of the framework's URI-keyed cache (a re-picked image must show on the
+    /// next break). A failed decode leaves the overlays on the solid
+    /// fallback color.
+    /// </summary>
+    private static BitmapImage? CreateBackgroundSource(string imagePath, int decodeWidth)
+    {
+        try
+        {
+            var bitmap = new BitmapImage
+            {
+                DecodePixelType = DecodePixelType.Physical,
+                DecodePixelWidth = Math.Clamp(Math.Max(1, decodeWidth), 640, 3840)
+            };
+            WidgetImageStreamLoader.Fill(
+                bitmap,
+                imagePath,
+                settled =>
+                {
+                    if (!settled)
+                    {
+                        App.Log($"[EyeRest] Break background image failed to decode: {imagePath}");
+                    }
+                });
+            return bitmap;
+        }
+        catch (Exception ex) when (ex is COMException or InvalidOperationException)
+        {
+            App.Log($"[EyeRest] Break background image failed to load: {imagePath}: {ex.Message}");
+            return null;
         }
     }
 
@@ -164,21 +212,23 @@ internal static class EyeRestOverlay
 }
 
 /// <summary>
-/// One monitor's break overlay, Focust-style (PromptApp.vue): a full-bleed
-/// background (solid color or image) under a dim layer, carrying a centered
-/// card painted in the app window material design language (Mica/Acrylic/Solid
-/// resolved from the global appearance settings, bordered like a widget
-/// surface), a radial progress ring around the countdown, a random break
-/// suggestion, the prominent accent "back to work" button and a keyboard
-/// hint. Enter/Space (or the button) ends the break immediately through the
+/// One monitor's break overlay, a faithful port of Focust's PromptApp.vue:
+/// the raw user background (solid color, or the image cover-fitted to this
+/// monitor — no spanning, no material processing) under the slate-950/35
+/// scrim, carrying the frosted-glass card (bg-white/10 acrylic with a
+/// border-white/10 hairline, rounded-3xl, p-10, max-w-3xl) with the kind
+/// title, a radial progress ring around the countdown, a random break
+/// suggestion, the green "back to work" button and a keyboard hint.
+/// Enter/Space (or the button) ends the break immediately through the
 /// shared deduplicated skip path — the primary overlay holds keyboard focus
-/// so the shortcut works without hunting for the button. Window-style
-/// surgery copies <see cref="DisplayIdentifyOverlayWindow"/>: borderless
-/// topmost tool window hidden from Alt-Tab. Unlike the pre-redesign overlay,
-/// the topmost band is actually claimed through
-/// <see cref="Win32Helper.SetWindowPos"/>: setting WS_EX_TOPMOST via
-/// SetWindowLong only flips the style bit, it does not reorder an already
-/// created window, so the overlay used to surface in the normal z-order band.
+/// (forcibly claimed across the Windows foreground lock) so the shortcut
+/// works without hunting for the button. Window-style surgery copies
+/// <see cref="DisplayIdentifyOverlayWindow"/>: borderless topmost tool
+/// window hidden from Alt-Tab. Unlike the pre-redesign overlay, the topmost
+/// band is actually claimed through <see cref="Win32Helper.SetWindowPos"/>:
+/// setting WS_EX_TOPMOST via SetWindowLong only flips the style bit, it does
+/// not reorder an already created window, so the overlay used to surface in
+/// the normal z-order band.
 /// </summary>
 internal sealed class EyeRestOverlayWindow
 {
@@ -186,10 +236,11 @@ internal sealed class EyeRestOverlayWindow
     // layered alpha below 0xFF lets desktop text bleed through the background.
     private const byte OverlayAlpha = 0xFF;
 
-    // Focust's radial ring: a 200px circle with a 10px stroke, elapsed arc in
-    // near-white over a faint track, countdown centered inside.
-    private const double RingSize = 200;
-    private const double RingStroke = 10;
+    // Focust's radial ring (PromptApp.vue): a w-48 (192px) circle with a
+    // 12px stroke (--thickness), progress arc over a faint track, the
+    // text-5xl (48px) countdown centered inside.
+    private const double RingSize = 192;
+    private const double RingStroke = 12;
     private const double RingCenter = RingSize / 2;
     private const double RingRadius = (RingSize - RingStroke) / 2;
 
@@ -215,6 +266,7 @@ internal sealed class EyeRestOverlayWindow
         TimeSpan duration,
         EyeRestBreakBackground background,
         EyeRestOverlaySurface surface,
+        BitmapImage? backgroundSource,
         RectInt32 monitorBounds,
         LocalizationService localization,
         Action skipRequested,
@@ -233,7 +285,7 @@ internal sealed class EyeRestOverlayWindow
             Text = titleText,
             Foreground = new SolidColorBrush(surface.TitleColor),
             HorizontalAlignment = HorizontalAlignment.Center,
-            FontSize = 28,
+            FontSize = 36,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
         };
 
@@ -243,7 +295,7 @@ internal sealed class EyeRestOverlayWindow
             Foreground = new SolidColorBrush(surface.CountdownColor),
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
-            FontSize = 44,
+            FontSize = 48,
             FontWeight = Microsoft.UI.Text.FontWeights.Bold
         };
 
@@ -281,35 +333,49 @@ internal sealed class EyeRestOverlayWindow
             Foreground = new SolidColorBrush(surface.TipColor),
             HorizontalAlignment = HorizontalAlignment.Center,
             TextAlignment = TextAlignment.Center,
-            FontSize = 17,
+            FontSize = 24,
             FontWeight = Microsoft.UI.Text.FontWeights.Medium,
             TextWrapping = TextWrapping.Wrap,
-            MaxWidth = 560
+            MaxWidth = 640
         };
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(tip, tipText);
 
         // The single affordance (deliberately no postpone secondary button):
-        // one prominent action ends the break. It is the app's own accent
-        // button (AccentButtonStyle + the window-scoped accent resources, the
-        // same scoping ThemeService applies to every app window), so rest,
-        // hover, pressed and the on-accent label follow the app's design
-        // language instead of a bespoke palette — and the label inherits the
-        // templated foreground rather than pinning white, which reads wrong
-        // whenever the accent runs light.
+        // one prominent action ends the break. Focust's btn-success btn-wide
+        // btn-lg: the DaisyUI success greens with their hover/pressed shades,
+        // 256×48 metrics, 18pt label. Element-level theme resource overrides
+        // keep the pointer/pressed states inside that palette (the default
+        // template would otherwise swap in the system accent on hover); the
+        // label TextBlock deliberately sets NO foreground so the templated
+        // states (and Button.Foreground) reach it.
         _resumeButton = new Button
         {
             Content = new TextBlock
             {
                 Text = resumeText,
-                FontSize = 16,
+                FontSize = 18,
                 FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
             },
-            Style = ResolveAccentButtonStyle(),
-            MinWidth = 220,
-            Height = 44,
-            Padding = new Thickness(28, 0, 28, 0),
+            Background = new SolidColorBrush(Color.FromArgb(0xFF, 0x16, 0xA3, 0x4A)),
+            Foreground = new SolidColorBrush(Colors.White),
+            MinWidth = 256,
+            Height = 48,
+            Padding = new Thickness(32, 0, 32, 0),
+            CornerRadius = new CornerRadius(8),
             HorizontalAlignment = HorizontalAlignment.Center
         };
+        _resumeButton.Resources["ButtonBackgroundPointerOver"] =
+            new SolidColorBrush(Color.FromArgb(0xFF, 0x15, 0x80, 0x3D));
+        _resumeButton.Resources["ButtonBackgroundPressed"] =
+            new SolidColorBrush(Color.FromArgb(0xFF, 0x16, 0x65, 0x34));
+        _resumeButton.Resources["ButtonForegroundPointerOver"] =
+            new SolidColorBrush(Colors.White);
+        _resumeButton.Resources["ButtonForegroundPressed"] =
+            new SolidColorBrush(Colors.White);
+        _resumeButton.Resources["ButtonBorderBrushPointerOver"] =
+            new SolidColorBrush(Colors.Transparent);
+        _resumeButton.Resources["ButtonBorderBrushPressed"] =
+            new SolidColorBrush(Colors.Transparent);
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(_resumeButton, resumeText);
         _resumeButton.Click += (_, _) => skipRequested();
 
@@ -325,7 +391,7 @@ internal sealed class EyeRestOverlayWindow
         {
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
-            Spacing = 24
+            Spacing = 32
         };
         cardContent.Children.Add(title);
         cardContent.Children.Add(ring);
@@ -337,15 +403,16 @@ internal sealed class EyeRestOverlayWindow
         {
             Background = new SolidColorBrush(ParseBackgroundColor(background.ColorHex))
         };
-        if (background.IsImage && !string.IsNullOrWhiteSpace(background.ImagePath))
+        if (backgroundSource is not null)
         {
-            root.Children.Add(CreateBackgroundImage(background.ImagePath!, monitorBounds));
+            root.Children.Add(CreateBackgroundImage(backgroundSource));
         }
 
-        // The dim layer applies in both modes (Focust dims over solid
-        // backgrounds too) so the card text stays readable; its strength
-        // follows the effective theme (a light-theme break still dims dark —
-        // the rest screen should emit less light, not more).
+        // Focust's scrim (bg-slate-950/35) applies in both background modes
+        // (it dims over solid backgrounds too) and stays dark in both
+        // themes: it keeps the glass card's light text family readable over
+        // an arbitrary raw background, and a rest screen should emit less
+        // light, not more.
         root.Children.Add(new Grid
         {
             Background = new SolidColorBrush(surface.DimColor),
@@ -353,35 +420,32 @@ internal sealed class EyeRestOverlayWindow
         });
 
         // Theme parity with the app windows: the overlay root follows the
-        // effective light/dark theme (theme resources inside the card, and
-        // the accent button's templated states, resolve accordingly) and the
-        // accent resources carry the effective accent, not the system
-        // default — the same two calls ThemeService.ApplyToWindow makes.
+        // effective light/dark theme so the templated button states resolve
+        // in the matching chrome.
         root.RequestedTheme = surface.IsDark ? ElementTheme.Dark : ElementTheme.Light;
-        AccentResourceScope.Apply(
-            root,
-            App.Current.ThemeService?.GetEffectiveAccentColor()
-                ?? AccentColorHelper.DefaultAccentColor);
 
-        // The card surface itself follows the widget material design language:
-        // in-app XAML acrylic (a real blur of the dimmed background behind the
-        // card) or the app's translucent embedded tint (mica approximation /
-        // solid), bordered with the same widget border calculator output.
-        Brush cardBackground = surface.CardMaterial == EyeRestOverlayCardMaterial.Acrylic
-            ? new AcrylicBrush
-            {
-                TintColor = surface.CardTintColor,
-                TintOpacity = surface.CardTintOpacity,
-                TintLuminosityOpacity = surface.CardLuminosityOpacity,
-                FallbackColor = surface.CardFallbackColor
-            }
-            : new SolidColorBrush(surface.CardTintColor);
+        // No chrome between the background and the glass panel: the break
+        // content goes straight into Focust's frosted card below.
+
+        // Focust's frosted-glass card (PromptApp.vue): backdrop-blur-xl glass
+        // at bg-white/10 with a border-white/10 hairline, rounded-3xl,
+        // p-10, max-w-3xl, over the slate-950/35 scrim. The in-app XAML
+        // acrylic gives a REAL blur of the dimmed background behind the
+        // panel, so the raw image stays the hero of the break while the
+        // content sits on readable glass; the translucent dark fallback
+        // covers systems where the blur is unavailable.
         var card = new Border
         {
-            Background = cardBackground,
-            BorderBrush = new SolidColorBrush(surface.CardBorderColor),
-            BorderThickness = new Thickness(surface.CardBorderThickness),
-            CornerRadius = new CornerRadius(8),
+            Background = new AcrylicBrush
+            {
+                TintColor = Colors.White,
+                TintOpacity = 0.10,
+                FallbackColor = Color.FromArgb(0x99, 0x14, 0x14, 0x19)
+            },
+            BorderBrush = new SolidColorBrush(
+                Color.FromArgb(0x1A, 0xFF, 0xFF, 0xFF)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(24),
             Padding = new Thickness(40),
             MaxWidth = 768,
             HorizontalAlignment = HorizontalAlignment.Center,
@@ -389,7 +453,7 @@ internal sealed class EyeRestOverlayWindow
             Child = cardContent
         };
         root.Children.Add(card);
-        // The entrance animation targets the card.
+        // The entrance animation targets the glass card.
         FrameworkElement entranceTarget = card;
 
         // Keyboard parity with Focust's keydown handler: Enter/Space ends the
@@ -697,48 +761,19 @@ internal sealed class EyeRestOverlayWindow
     }
 
     /// <summary>
-    /// The app's accent button style (ManagedStorageMigrationDialog precedent
-    /// for the resource lookup). A failed lookup falls back to the default
-    /// button template, which keeps the resume affordance functional.
+    /// Full-bleed cover image for ONE monitor: UniformToFill fills the
+    /// window exactly (aspect is preserved by cropping, never stretched), so
+    /// every monitor is completely covered by the raw background with no
+    /// additional zoom or distortion — no virtual-desktop spanning, no
+    /// material processing.
     /// </summary>
-    private static Style? ResolveAccentButtonStyle() =>
-        Application.Current.Resources.TryGetValue("AccentButtonStyle", out object? resource) &&
-        resource is Style style
-            ? style
-            : null;
-
-    /// <summary>
-    /// Full-bleed cover image. The decode is bounded to the monitor's physical
-    /// width so a full-resolution wallpaper never enters the decoded-bitmap
-    /// budget; the stream loader keeps the source out of the framework's
-    /// URI-keyed cache (a re-picked image must show on the next break).
-    /// </summary>
-    private static Image CreateBackgroundImage(string imagePath, RectInt32 monitorBounds)
+    private static Image CreateBackgroundImage(BitmapImage source) => new()
     {
-        var bitmap = new BitmapImage
-        {
-            DecodePixelType = DecodePixelType.Physical,
-            DecodePixelWidth = Math.Clamp(monitorBounds.Width, 640, 3840)
-        };
-        WidgetImageStreamLoader.Fill(
-            bitmap,
-            imagePath,
-            settled =>
-            {
-                if (!settled)
-                {
-                    App.Log($"[EyeRest] Break background image failed to decode: {imagePath}");
-                }
-            });
-
-        return new Image
-        {
-            Source = bitmap,
-            Stretch = Stretch.UniformToFill,
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            VerticalAlignment = VerticalAlignment.Stretch
-        };
-    }
+        Source = source,
+        Stretch = Stretch.UniformToFill,
+        HorizontalAlignment = HorizontalAlignment.Stretch,
+        VerticalAlignment = VerticalAlignment.Stretch
+    };
 
     /// <summary>Parses a #RRGGBB string (factory-normalized) with the dark default fallback.</summary>
     private static Color ParseBackgroundColor(string colorHex)
