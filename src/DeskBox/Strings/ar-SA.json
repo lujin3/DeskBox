@@ -2993,5 +2993,16 @@
   "Todo.Due.Custom.Time": "وقت مخصص",
   "Todo.Detail.EditStep": "تحرير الخطوة",
   "EyeRest.Notification.LongBreakTitle": "استراحة طويلة قريبًا",
-  "EyeRest.Notification.LongBreakBody": "تبدأ الاستراحة الطويلة بعد 30 ثانية — قم وتحرك قليلًا"
+  "EyeRest.Notification.LongBreakBody": "تبدأ الاستراحة الطويلة بعد 30 ثانية — قم وتحرك قليلًا",
+  "EyeRest.Overlay.MiniTitle": "استراحة قصيرة",
+  "EyeRest.Overlay.LongTitle": "استراحة طويلة",
+  "EyeRest.Overlay.Skip": "تخطَّ هذه الاستراحة",
+  "EyeRest.Tip.Mini.1": "انظر إلى شيء بعيد لتريح عينيك",
+  "EyeRest.Tip.Mini.2": "أغمض عينيك لبضع لحظات",
+  "EyeRest.Tip.Mini.3": "ارمش عدة مرات لترطيب عينيك",
+  "EyeRest.Tip.Mini.4": "عدّل جلستك واسترخِ بكتفيك",
+  "EyeRest.Tip.Long.1": "قم وتجوّل لبضع دقائق",
+  "EyeRest.Tip.Long.2": "اشرب قليلاً من الماء",
+  "EyeRest.Tip.Long.3": "مدّ ذراعيك وظهرك",
+  "EyeRest.Tip.Long.4": "انظر من النافذة ودع عينيك ترتاحان في البعيد"
 }

@@ -2993,5 +2993,16 @@
   "Todo.Due.Custom.Time": "कस्टम समय",
   "Todo.Detail.EditStep": "चरण संपादित करें",
   "EyeRest.Notification.LongBreakTitle": "लंबा ब्रेक आने वाला है",
-  "EyeRest.Notification.LongBreakBody": "30 सेकंड में लंबा ब्रेक शुरू होगा — उठकर हल्की चहल-कदमी करें"
+  "EyeRest.Notification.LongBreakBody": "30 सेकंड में लंबा ब्रेक शुरू होगा — उठकर हल्की चहल-कदमी करें",
+  "EyeRest.Overlay.MiniTitle": "छोटा ब्रेक",
+  "EyeRest.Overlay.LongTitle": "लंबा ब्रेक",
+  "EyeRest.Overlay.Skip": "यह ब्रेक छोड़ें",
+  "EyeRest.Tip.Mini.1": "दूर की चीज़ें देखकर आँखों को आराम दें",
+  "EyeRest.Tip.Mini.2": "कुछ पल आँखें बंद करके आराम करें",
+  "EyeRest.Tip.Mini.3": "जानबूझकर कुछ बार पलकें झपकाएँ ताकि आँखें नम रहें",
+  "EyeRest.Tip.Mini.4": "अपनी मुद्रा सुधारें और कंधे ढीले छोड़ें",
+  "EyeRest.Tip.Long.1": "उठकर कुछ मिनट टहलें",
+  "EyeRest.Tip.Long.2": "थोड़ा पानी पिएँ",
+  "EyeRest.Tip.Long.3": "बाहें और पीठ को खींचकर लचीला करें",
+  "EyeRest.Tip.Long.4": "खिड़की से बाहर देखें और आँखों को दूर देखने दें"
 }

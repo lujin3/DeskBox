@@ -2993,5 +2993,16 @@
   "Todo.Due.Custom.Time": "Heure personnalisée",
   "Todo.Detail.EditStep": "Modifier l’étape",
   "EyeRest.Notification.LongBreakTitle": "Longue pause à venir",
-  "EyeRest.Notification.LongBreakBody": "Une longue pause commence dans 30 secondes — levez-vous et bougez un peu"
+  "EyeRest.Notification.LongBreakBody": "Une longue pause commence dans 30 secondes — levez-vous et bougez un peu",
+  "EyeRest.Overlay.MiniTitle": "Petite pause",
+  "EyeRest.Overlay.LongTitle": "Longue pause",
+  "EyeRest.Overlay.Skip": "Passer cette pause",
+  "EyeRest.Tip.Mini.1": "Regardez au loin pour détendre vos yeux",
+  "EyeRest.Tip.Mini.2": "Fermez les yeux quelques instants",
+  "EyeRest.Tip.Mini.3": "Clignez plusieurs fois pour humidifier vos yeux",
+  "EyeRest.Tip.Mini.4": "Redressez votre posture et détendez vos épaules",
+  "EyeRest.Tip.Long.1": "Levez-vous et marchez quelques minutes",
+  "EyeRest.Tip.Long.2": "Buvez un peu d'eau",
+  "EyeRest.Tip.Long.3": "Étirez vos bras et votre dos",
+  "EyeRest.Tip.Long.4": "Regardez par la fenêtre et laissez reposer vos yeux au loin"
 }

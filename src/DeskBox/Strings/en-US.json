@@ -2993,5 +2993,16 @@
   "Todo.Due.Custom.Time": "Custom time",
   "Todo.Detail.EditStep": "Edit step",
   "EyeRest.Notification.LongBreakTitle": "Long break coming up",
-  "EyeRest.Notification.LongBreakBody": "A long break starts in 30 seconds — time to stand up and move around."
+  "EyeRest.Notification.LongBreakBody": "A long break starts in 30 seconds — time to stand up and move around.",
+  "EyeRest.Overlay.MiniTitle": "Eye break",
+  "EyeRest.Overlay.LongTitle": "Long break",
+  "EyeRest.Overlay.Skip": "Skip this break",
+  "EyeRest.Tip.Mini.1": "Look at something in the distance to relax your eyes",
+  "EyeRest.Tip.Mini.2": "Close your eyes for a few moments",
+  "EyeRest.Tip.Mini.3": "Blink a few times to moisten your eyes",
+  "EyeRest.Tip.Mini.4": "Adjust your posture and relax your shoulders",
+  "EyeRest.Tip.Long.1": "Get up and walk around for a few minutes",
+  "EyeRest.Tip.Long.2": "Drink some water",
+  "EyeRest.Tip.Long.3": "Stretch your arms and back",
+  "EyeRest.Tip.Long.4": "Look out the window and let your eyes rest on the distance"
 }

@@ -2993,5 +2993,16 @@
   "Todo.Due.Custom.Time": "Настраиваемое время",
   "Todo.Detail.EditStep": "Изменить шаг",
   "EyeRest.Notification.LongBreakTitle": "Скоро долгий перерыв",
-  "EyeRest.Notification.LongBreakBody": "Долгий перерыв начнётся через 30 секунд — встаньте и разомнитесь"
+  "EyeRest.Notification.LongBreakBody": "Долгий перерыв начнётся через 30 секунд — встаньте и разомнитесь",
+  "EyeRest.Overlay.MiniTitle": "Короткий перерыв",
+  "EyeRest.Overlay.LongTitle": "Долгий перерыв",
+  "EyeRest.Overlay.Skip": "Пропустить этот перерыв",
+  "EyeRest.Tip.Mini.1": "Посмотрите вдаль, чтобы расслабить глаза",
+  "EyeRest.Tip.Mini.2": "Закройте глаза на несколько секунд",
+  "EyeRest.Tip.Mini.3": "Несколько раз моргните, чтобы увлажнить глаза",
+  "EyeRest.Tip.Mini.4": "Выпрямитесь и расслабьте плечи",
+  "EyeRest.Tip.Long.1": "Встаньте и пройдитесь несколько минут",
+  "EyeRest.Tip.Long.2": "Выпейте немного воды",
+  "EyeRest.Tip.Long.3": "Потянитесь — руки и спину",
+  "EyeRest.Tip.Long.4": "Посмотрите в окно, дайте глазам отдохнуть на дальнем плане"
 }

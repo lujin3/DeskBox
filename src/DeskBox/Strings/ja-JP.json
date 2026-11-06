@@ -2993,5 +2993,16 @@
   "Todo.Due.Custom.Time": "カスタム時刻",
   "Todo.Detail.EditStep": "ステップを編集",
   "EyeRest.Notification.LongBreakTitle": "長い休憩の予告",
-  "EyeRest.Notification.LongBreakBody": "まもなく 30 秒後に長い休憩が始まります。立ち上がってストレッチしましょう"
+  "EyeRest.Notification.LongBreakBody": "まもなく 30 秒後に長い休憩が始まります。立ち上がってストレッチしましょう",
+  "EyeRest.Overlay.MiniTitle": "ひと休み",
+  "EyeRest.Overlay.LongTitle": "長い休憩",
+  "EyeRest.Overlay.Skip": "この休憩をスキップ",
+  "EyeRest.Tip.Mini.1": "遠くの景色を眺めて目を休めましょう",
+  "EyeRest.Tip.Mini.2": "目を閉じて数秒休みましょう",
+  "EyeRest.Tip.Mini.3": "意識的にまばたきして目を潤しましょう",
+  "EyeRest.Tip.Mini.4": "姿勢を整えて肩を休めましょう",
+  "EyeRest.Tip.Long.1": "数分間立ち上がって歩きましょう",
+  "EyeRest.Tip.Long.2": "水を一口飲みましょう",
+  "EyeRest.Tip.Long.3": "腕と背中をストレッチしましょう",
+  "EyeRest.Tip.Long.4": "窓の外を眺めて目を遠くへ向けましょう"
 }

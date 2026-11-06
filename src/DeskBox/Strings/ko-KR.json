@@ -2993,5 +2993,16 @@
   "Todo.Due.Custom.Time": "사용자 지정 시간",
   "Todo.Detail.EditStep": "단계 편집",
   "EyeRest.Notification.LongBreakTitle": "긴 휴식 예정",
-  "EyeRest.Notification.LongBreakBody": "30초 후 긴 휴식이 시작됩니다 — 일어나서 몸을 움직여 보세요"
+  "EyeRest.Notification.LongBreakBody": "30초 후 긴 휴식이 시작됩니다 — 일어나서 몸을 움직여 보세요",
+  "EyeRest.Overlay.MiniTitle": "짧은 휴식",
+  "EyeRest.Overlay.LongTitle": "긴 휴식",
+  "EyeRest.Overlay.Skip": "이 휴식 건너뛰기",
+  "EyeRest.Tip.Mini.1": "먼 곳을 바라보며 눈을 푸세요",
+  "EyeRest.Tip.Mini.2": "몇 초간 눈을 감고 쉬세요",
+  "EyeRest.Tip.Mini.3": "의식적으로 몇 번 눈을 깜빡여 눈을 촉촉하게 하세요",
+  "EyeRest.Tip.Mini.4": "자세를 바로잡고 어깨를 풀어 주세요",
+  "EyeRest.Tip.Long.1": "일어나서 몇 분 걷세요",
+  "EyeRest.Tip.Long.2": "물을 마셔 보세요",
+  "EyeRest.Tip.Long.3": "팔과 등을 스트레칭하세요",
+  "EyeRest.Tip.Long.4": "창밖을 보며 눈을 멀리 두고 쉬게 하세요"
 }

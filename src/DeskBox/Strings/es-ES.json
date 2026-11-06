@@ -2993,5 +2993,16 @@
   "Todo.Due.Custom.Time": "Hora personalizada",
   "Todo.Detail.EditStep": "Editar paso",
   "EyeRest.Notification.LongBreakTitle": "Descanso largo pronto",
-  "EyeRest.Notification.LongBreakBody": "Un descanso largo comienza en 30 segundos: hora de levantarse y moverse un poco"
+  "EyeRest.Notification.LongBreakBody": "Un descanso largo comienza en 30 segundos: hora de levantarse y moverse un poco",
+  "EyeRest.Overlay.MiniTitle": "Descanso breve",
+  "EyeRest.Overlay.LongTitle": "Descanso largo",
+  "EyeRest.Overlay.Skip": "Saltar este descanso",
+  "EyeRest.Tip.Mini.1": "Mira algo lejano para relajar la vista",
+  "EyeRest.Tip.Mini.2": "Cierra los ojos unos instantes",
+  "EyeRest.Tip.Mini.3": "Parpadea varias veces para humedecer los ojos",
+  "EyeRest.Tip.Mini.4": "Corrige la postura y relaja los hombros",
+  "EyeRest.Tip.Long.1": "Levántate y camina unos minutos",
+  "EyeRest.Tip.Long.2": "Bebe un poco de agua",
+  "EyeRest.Tip.Long.3": "Estira brazos y espalda",
+  "EyeRest.Tip.Long.4": "Mira por la ventana y descansa la vista en la distancia"
 }

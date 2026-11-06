@@ -2993,5 +2993,16 @@
   "Todo.Due.Custom.Time": "কাস্টম সময়",
   "Todo.Detail.EditStep": "ধাপ সম্পাদনা করুন",
   "EyeRest.Notification.LongBreakTitle": "দীর্ঘ বিরতি আসন্ন",
-  "EyeRest.Notification.LongBreakBody": "৩০ সেকেন্ড পরে দীর্ঘ বিরতি শুরু হবে — উঠে একটু নড়াচড়া করুন"
+  "EyeRest.Notification.LongBreakBody": "৩০ সেকেন্ড পরে দীর্ঘ বিরতি শুরু হবে — উঠে একটু নড়াচড়া করুন",
+  "EyeRest.Overlay.MiniTitle": "ছোট বিরতি",
+  "EyeRest.Overlay.LongTitle": "দীর্ঘ বিরতি",
+  "EyeRest.Overlay.Skip": "এই বিরতি বাদ দিন",
+  "EyeRest.Tip.Mini.1": "দূরের কিছু দেখে চোখকে বিশ্রাম দিন",
+  "EyeRest.Tip.Mini.2": "কিছুক্ষণ চোখ বন্ধ করে বিশ্রাম নিন",
+  "EyeRest.Tip.Mini.3": "চোখ আর্দ্র রাখতে কয়েকবার পলক ফেলুন",
+  "EyeRest.Tip.Mini.4": "বসার ভঙ্গি ঠিক করুন ও কাঁধ শিথিল করুন",
+  "EyeRest.Tip.Long.1": "উঠে কিছুক্ষণ হাঁটুন",
+  "EyeRest.Tip.Long.2": "একটু পানি পান করুন",
+  "EyeRest.Tip.Long.3": "বাহু ও পিঠ স্ট্রেচ করুন",
+  "EyeRest.Tip.Long.4": "জানালা থেকে বাইরে তাকিয়ে চোখকে দূরে বিশ্রাম দিন"
 }

@@ -4,6 +4,8 @@ using CommunityToolkit.Mvvm.Input;
 using DeskBox.Controls.WidgetContents;
 using DeskBox.Core.Persistence;
 using DeskBox.Features.Todo;
+using DeskBox.Features.EyeRest;
+using DeskBox.Contracts;
 using DeskBox.Features.Search;
 using DeskBox.Features.Backup;
 using DeskBox.Features.QuickCapture;
@@ -73,6 +75,8 @@ public partial class App : Application
     private const string TodoSnoozeConfirmationNotificationTag = "todo-snooze-confirmation";
     private const string TodoReminderNotificationTag = "todo-reminder";
     private const string TodoReminderNotificationGroup = "todo";
+    private const string EyeRestPreviewNotificationTag = "eye-rest-preview";
+    private const string EyeRestPreviewNotificationGroup = "eye-rest";
     private const string DesktopOrganizationNotificationGroup = "desktop-organization";
     private const string DesktopOrganizationTargetUnavailableNotificationTag = "desktop-organization-target-unavailable";
     private const string FolderMappingNotificationGroup = "folder-mapping";
@@ -83,6 +87,7 @@ public partial class App : Application
     private const string SearchFeatureRuntimeId = "search";
     private const string QuickCaptureFeatureRuntimeId = "quick-capture";
     private const string TodoRemindersFeatureRuntimeId = "todo-reminders";
+    private const string EyeRestFeatureRuntimeId = "eye-rest";
     private const string PendingJumpListArgumentFileName = "pending-jumplist-arg.txt";
     private const string PendingUpdateInstallResultFileName = "pending-update-install-result.txt";
     private const string VerboseLoggingEnvironmentVariable = "DESKBOX_VERBOSE_LOG";
@@ -165,6 +170,8 @@ public partial class App : Application
     private FeatureRuntimeRegistry? _featureRuntimes;
     private TodoReminderRuntime? _todoReminderRuntime;
     private TodoSettingsCoordinator? _todoSettings;
+    private EyeRestRuntime? _eyeRestRuntime;
+    private EyeRestSettingsCoordinator? _eyeRestSettings;
     private SearchSettingsCoordinator? _searchSettings;
     private SearchFeatureRuntime? _searchFeatureRuntime;
     private BackupSettingsCoordinator? _backupSettings;
@@ -1354,6 +1361,11 @@ public partial class App : Application
                 SettingsService,
                 enabled => WidgetManager!.SetTodoEnabledAsync(enabled, reveal: enabled),
                 checkNow => RefreshTodoReminderService(checkNow));
+            _eyeRestRuntime = _featureRuntimes.Register(EyeRestFeatureRuntimeId,
+                new EyeRestRuntime(CreateEyeRestTimerService, () => _eyeRestSettings!.Read()));
+            _eyeRestSettings = new EyeRestSettingsCoordinator(
+                SettingsService,
+                settings => HandleEyeRestSettingsReconcile(settings));
             _searchSettings = new SearchSettingsCoordinator(
                 SettingsService, LocalizationService,
                 () => _everythingSearchService,
@@ -1582,6 +1594,7 @@ public partial class App : Application
             RunOptionalStartupStep("settings-ipc-server", StartSettingsIpcServer);
 
             RunOptionalStartupStep("todo-reminders", () => RefreshTodoReminderService());
+            RunOptionalStartupStep("eye-rest", () => HandleEyeRestSettingsReconcile(_eyeRestSettings!.Read()));
             RunOptionalStartupStep("native-notifications", StartNativeNotificationService);
             await RunOptionalStartupStepAsync(
                 "external-activation-initialization",
@@ -2786,6 +2799,124 @@ public partial class App : Application
             adapter.ViewModel.IsInitialized
                 ? adapter.ViewModel
                 : null;
+    }
+
+    private EyeRestTimerService CreateEyeRestTimerService()
+    {
+        var service = new EyeRestTimerService(_eyeRestSettings!.Read(), UiDispatcherQueue);
+        service.EventRaised += OnEyeRestTimerEvent;
+        service.BreakCountdown += EyeRestOverlay.UpdateAllRemaining;
+        return service;
+    }
+
+    private void OnEyeRestTimerEvent(EyeRestBreakEvent @event)
+    {
+        switch (@event.EventKind)
+        {
+            case EyeRestBreakEventKind.BreakDue:
+                // Skip marshals back into the timer session on the UI thread
+                // (SkipEyeRestBreak), whose BreakEnded event closes the overlay.
+                EyeRestOverlay.ShowAll(
+                    @event.BreakKind,
+                    @event.Remaining,
+                    LocalizationService,
+                    SkipEyeRestBreak);
+                break;
+            case EyeRestBreakEventKind.BreakImminent:
+                ShowEyeRestLongBreakPreviewNotification();
+                break;
+            case EyeRestBreakEventKind.BreakEnded:
+                EyeRestOverlay.CloseAll();
+                break;
+        }
+    }
+
+    private void SkipEyeRestBreak()
+    {
+        if (UiDispatcherQueue is { HasThreadAccess: false } dispatcherQueue)
+        {
+            dispatcherQueue.TryEnqueue(SkipEyeRestBreak);
+            return;
+        }
+
+        try
+        {
+            _eyeRestRuntime?.Current?.SkipCurrentBreak();
+        }
+        catch (Exception ex)
+        {
+            Log($"[EyeRest] Skip failed: {ex}");
+            EyeRestOverlay.CloseAll();
+        }
+    }
+
+    /// <summary>
+    /// Eye-rest runtime reconciliation entry: the settings coordinator's
+    /// callback (which can fire from a non-UI SettingsChanged pass) and the
+    /// startup step both route through here so the session's DispatcherQueue
+    /// timers are only ever touched on the UI thread.
+    /// </summary>
+    private void HandleEyeRestSettingsReconcile(EyeRestRuntimeSettings settings)
+    {
+        if (UiDispatcherQueue is { HasThreadAccess: false } dispatcherQueue)
+        {
+            dispatcherQueue.TryEnqueue(() => HandleEyeRestSettingsReconcile(settings));
+            return;
+        }
+
+        if (_eyeRestSettings is null || _eyeRestSettings.IsStopped || _eyeRestRuntime is null)
+        {
+            return;
+        }
+
+        try
+        {
+            _eyeRestRuntime.Reconcile(settings);
+        }
+        catch (Exception ex)
+        {
+            Log($"[EyeRest] Reconciliation failed: {ex}");
+        }
+    }
+
+    private void ShowEyeRestLongBreakPreviewNotification()
+    {
+        if (UiDispatcherQueue is { HasThreadAccess: false } dispatcherQueue)
+        {
+            dispatcherQueue.TryEnqueue(ShowEyeRestLongBreakPreviewNotification);
+            return;
+        }
+
+        string title = LocalizationService.T("EyeRest.Notification.LongBreakTitle");
+        string message = LocalizationService.T("EyeRest.Notification.LongBreakBody");
+        if (_nativeNotificationService?.TryShow(
+                title,
+                message,
+                options: new NativeAppNotificationOptions(
+                    EyeRestPreviewNotificationTag,
+                    EyeRestPreviewNotificationGroup)) == true ||
+            _trayIcon is null)
+        {
+            return;
+        }
+
+        try
+        {
+            _trayIcon.ShowNotification(
+                title,
+                message,
+                NotificationIcon.Info,
+                customIconHandle: null,
+                largeIcon: false,
+                sound: false,
+                respectQuietTime: true,
+                realtime: false,
+                timeout: TimeSpan.FromSeconds(4));
+        }
+        catch (Exception ex)
+        {
+            Log($"[EyeRest] Long break preview notification failed: {ex.Message}");
+        }
     }
 
     private void StartNativeNotificationService()
@@ -6720,6 +6851,14 @@ public partial class App : Application
             ShutdownStep.Bounded("backup-runtime", () =>
                 _backupRuntime?.StopAsync() ?? Task.CompletedTask,
                 shutdownGrace),
+            // Eye rest: cover screens off and the coordinator stops reacting
+            // to settings changes; the runtime session itself is released by
+            // the feature-runtime registry's reverse-order shutdown sweep.
+            ShutdownStep.Sync("eye-rest", () =>
+            {
+                EyeRestOverlay.CloseAll();
+                _eyeRestSettings?.Stop();
+            }),
             ShutdownStep.Bounded("todo-settings", () =>
             {
 #if DEBUG

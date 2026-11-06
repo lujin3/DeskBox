@@ -2993,5 +2993,16 @@
   "Todo.Due.Custom.Time": "自定义时间",
   "Todo.Detail.EditStep": "编辑步骤",
   "EyeRest.Notification.LongBreakTitle": "长休息即将开始",
-  "EyeRest.Notification.LongBreakBody": "长休息将在 30 秒后开始，起身活动一下吧"
+  "EyeRest.Notification.LongBreakBody": "长休息将在 30 秒后开始，起身活动一下吧",
+  "EyeRest.Overlay.MiniTitle": "小憩一下",
+  "EyeRest.Overlay.LongTitle": "长休息",
+  "EyeRest.Overlay.Skip": "跳过本次休息",
+  "EyeRest.Tip.Mini.1": "看看远处的景物，放松眼部肌肉",
+  "EyeRest.Tip.Mini.2": "闭上眼睛，休息几秒",
+  "EyeRest.Tip.Mini.3": "有意识地多眨几次眼，润润眼睛",
+  "EyeRest.Tip.Mini.4": "调整一下坐姿，放松肩膀",
+  "EyeRest.Tip.Long.1": "起身走动几分钟",
+  "EyeRest.Tip.Long.2": "喝口水，补充水分",
+  "EyeRest.Tip.Long.3": "伸展一下手臂和背部",
+  "EyeRest.Tip.Long.4": "看看窗外，让眼睛望向远处"
 }
