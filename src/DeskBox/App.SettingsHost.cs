@@ -610,7 +610,7 @@ public partial class App
             // The host process owns no eye-rest runtime (the main process's
             // coordinator reacts to the externally-propagated settings change);
             // the coordinator here only needs to persist and clamp.
-            new EyeRestSettingsCoordinator(settings, settings => { }),
+            new EyeRestSettingsCoordinator(settings, _ => { }),
             new PerformanceSettingsCoordinator(settings),
             hotkey,
             widgetActions,
