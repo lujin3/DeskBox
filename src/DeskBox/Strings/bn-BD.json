@@ -3055,12 +3055,6 @@
   "Settings.EyeRest.BackgroundFolder.Title": "ব্যাকগ্রাউন্ড ছবির ফোল্ডার",
   "Settings.EyeRest.BackgroundFolder.Description": "ফোল্ডার মোডে প্রতিটি বিরতিতে একটি এলোমেলো ছবি নেওয়া হয়",
   "Settings.EyeRest.BackgroundFolder.Choose": "ফোল্ডার নির্বাচন করুন",
-  "Settings.EyeRest.OverlayTheme.Title": "বিরতি ওভারলেের ধরন",
-  "Settings.EyeRest.OverlayTheme.Description": "বিরতির সময় পর্দা ঢেকে রাখার ভিজ্যুয়াল ধরন বেছে নিন",
-  "Settings.EyeRest.OverlayTheme.Glass": "ফ্রস্টেড গ্লাস",
-  "Settings.EyeRest.OverlayTheme.Ink": "কালি",
-  "Settings.EyeRest.OverlayTheme.Paper": "কাগজ",
-  "Settings.EyeRest.OverlayTheme.Minimal": "মিনিমাল",
   "Tray.EyeRest.ToggleOn": "চোখের যত্নে বিরতি: চালু",
   "Tray.EyeRest.ToggleOff": "চোখের যত্নে বিরতি: বন্ধ",
   "Tray.EyeRest.BreakNow": "এখনই বিরতি নিন"

@@ -3055,12 +3055,6 @@
   "Settings.EyeRest.BackgroundFolder.Title": "Pasta de imagens de fundo",
   "Settings.EyeRest.BackgroundFolder.Description": "No modo pasta, uma imagem aleatória é escolhida a cada pausa",
   "Settings.EyeRest.BackgroundFolder.Choose": "Escolher pasta",
-  "Settings.EyeRest.OverlayTheme.Title": "Estilo da sobreposição",
-  "Settings.EyeRest.OverlayTheme.Description": "Escolha o estilo visual da sobreposição de pausa",
-  "Settings.EyeRest.OverlayTheme.Glass": "Vidro fosco",
-  "Settings.EyeRest.OverlayTheme.Ink": "Tinta",
-  "Settings.EyeRest.OverlayTheme.Paper": "Papel",
-  "Settings.EyeRest.OverlayTheme.Minimal": "Mínimo",
   "Tray.EyeRest.ToggleOn": "Pausas para os olhos: ativadas",
   "Tray.EyeRest.ToggleOff": "Pausas para os olhos: desativadas",
   "Tray.EyeRest.BreakNow": "Fazer uma pausa agora"

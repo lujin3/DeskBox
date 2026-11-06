@@ -1,6 +1,10 @@
 using DeskBox.Contracts;
 using DeskBox.Features.EyeRest;
+using DeskBox.Helpers;
 using DeskBox.Models;
+using DeskBox.Platform;
+using Microsoft.UI.Xaml;
+using Windows.UI;
 
 namespace DeskBox.Services;
 
@@ -148,14 +152,113 @@ public sealed class EyeRestSettingsCoordinator : IEyeRestSettings
             (eyeRest, value) => eyeRest.EyeRestBackgroundFolder = value,
             path ?? string.Empty);
 
-    public string ReadOverlayTheme() =>
-        EyeRestOverlayThemeFactory.NormalizeTheme(_settings.Settings.EyeRest.EyeRestOverlayTheme);
+    /// <summary>
+    /// One break's resolved overlay surface. The card reuses the widget
+    /// material design language — the same visual calculator inputs the
+    /// widget windows and the Glance calendar panel consume (material type,
+    /// surface opacity, material intensity, effective theme, effective
+    /// accent) plus the widget border calculator — so the break overlay
+    /// reads as a floating widget surface, never a divergent theme.
+    /// </summary>
+    public EyeRestOverlaySurface ReadOverlaySurface()
+    {
+        // EffectiveTheme already resolves a "System" preference through the
+        // OS; the Win32 fallback only covers a ThemeService-less context
+        // (never at break time, but the coordinator stays unit-callable).
+        ThemeService? themeService = App.Current.ThemeService;
+        bool isDark = themeService is null
+            ? Win32Helper.IsSystemDarkMode()
+            : themeService.EffectiveTheme == ElementTheme.Dark;
+        Color accent = themeService?.GetEffectiveAccentColor()
+            ?? AccentColorHelper.DefaultAccentColor;
+        AppSettings settings = _settings.Settings;
+        double surfaceOpacity = Math.Clamp(settings.WidgetOpacity, 0.0, 1.0);
+        string materialType = WindowsCompatibilityService.ResolveWidgetMaterialType(
+            settings.WidgetMaterialType);
 
-    public void SetOverlayTheme(string theme) =>
-        SetStringPreference(
-            eyeRest => eyeRest.EyeRestOverlayTheme,
-            (eyeRest, value) => eyeRest.EyeRestOverlayTheme = value,
-            EyeRestOverlayThemeFactory.NormalizeTheme(theme));
+        EyeRestOverlayCardMaterial cardMaterial = EyeRestOverlayCardMaterial.Tinted;
+        Color cardColor;
+        double cardTintOpacity = 0;
+        double cardLuminosityOpacity = 0;
+        if (SettingsService.IsAcrylicMaterial(materialType))
+        {
+            // Glance calendar-panel precedent: in-app XAML acrylic with the
+            // same tint/luminosity profile the widget surfaces use.
+            cardMaterial = EyeRestOverlayCardMaterial.Acrylic;
+            cardColor = WidgetMaterialVisualCalculator.BuildContentTintColor(isDark, accent);
+            WidgetMaterialOpacityProfile profile = WidgetMaterialVisualCalculator.CalculateAcrylic(
+                isDark,
+                materialType == SettingsService.WidgetMaterialTypeAcrylicBase,
+                surfaceOpacity,
+                settings.WidgetMaterialIntensity);
+            cardTintOpacity = profile.TintOpacity;
+            cardLuminosityOpacity = profile.LuminosityOpacity;
+        }
+        else if (SettingsService.IsMicaMaterial(materialType))
+        {
+            // Mica is a window-level material; the app's in-window surfaces
+            // approximate it with the embedded tint overlay instead.
+            cardColor = WidgetMaterialVisualCalculator.BuildEmbeddedMicaTintOverlayColor(
+                isDark,
+                accent,
+                materialType == SettingsService.WidgetMaterialTypeMicaAlt,
+                settings.WidgetMaterialIntensity);
+        }
+        else
+        {
+            cardColor = WidgetMaterialVisualCalculator.BuildContentSolidSurfaceColor(
+                isDark,
+                accent,
+                surfaceOpacity);
+        }
+
+        WidgetBorderVisuals border = WidgetBorderVisualCalculator.Resolve(
+            settings.WidgetBorderStyle,
+            settings.WidgetBorderColorMode,
+            isDark,
+            accent);
+        Color cardFallbackColor = Color.FromArgb(0xFF, cardColor.R, cardColor.G, cardColor.B);
+
+        // Text tiers, dim strength and ring track follow the effective theme;
+        // the elapsed arc carries the effective accent, tying the countdown
+        // to the app's accent design language. The dim stays dark in both
+        // themes — the rest screen should emit less light, not more.
+        return isDark
+            ? new EyeRestOverlaySurface(
+                IsDark: true,
+                CardMaterial: cardMaterial,
+                CardTintColor: cardColor,
+                CardTintOpacity: cardTintOpacity,
+                CardLuminosityOpacity: cardLuminosityOpacity,
+                CardFallbackColor: cardFallbackColor,
+                CardBorderThickness: border.Thickness,
+                CardBorderColor: border.BorderColor,
+                DimColor: Argb(0x73, 0x0B, 0x0E, 0x14),
+                TitleColor: Argb(0xE6, 0xFF, 0xFF, 0xFF),
+                CountdownColor: Argb(0xFF, 0xFF, 0xFF, 0xFF),
+                TipColor: Argb(0xE6, 0xC8, 0xC8, 0xCC),
+                HintColor: Argb(0x80, 0xFF, 0xFF, 0xFF),
+                RingTrackColor: Argb(0x26, 0xFF, 0xFF, 0xFF),
+                RingArcColor: accent)
+            : new EyeRestOverlaySurface(
+                IsDark: false,
+                CardMaterial: cardMaterial,
+                CardTintColor: cardColor,
+                CardTintOpacity: cardTintOpacity,
+                CardLuminosityOpacity: cardLuminosityOpacity,
+                CardFallbackColor: cardFallbackColor,
+                CardBorderThickness: border.Thickness,
+                CardBorderColor: border.BorderColor,
+                DimColor: Argb(0x59, 0x0F, 0x17, 0x2A),
+                TitleColor: Argb(0xE6, 0x1F, 0x29, 0x37),
+                CountdownColor: Argb(0xFF, 0x11, 0x18, 0x27),
+                TipColor: Argb(0xCC, 0x3F, 0x4A, 0x5A),
+                HintColor: Argb(0x99, 0x5B, 0x64, 0x72),
+                RingTrackColor: Argb(0x33, 0x1F, 0x29, 0x37),
+                RingArcColor: accent);
+    }
+
+    private static Color Argb(byte a, byte r, byte g, byte b) => Color.FromArgb(a, r, g, b);
 
     public void ResetPreferences(bool scheduleSave = true)
     {
@@ -170,7 +273,6 @@ public sealed class EyeRestSettingsCoordinator : IEyeRestSettings
         eyeRest.EyeRestBackgroundColor = EyeRestBreakBackground.DefaultColorHex;
         eyeRest.EyeRestBackgroundImage = string.Empty;
         eyeRest.EyeRestBackgroundFolder = string.Empty;
-        eyeRest.EyeRestOverlayTheme = EyeRestOverlayThemeFactory.ThemeGlass;
         if (scheduleSave)
         {
             _updatingPreferences = true;

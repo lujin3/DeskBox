@@ -3055,12 +3055,6 @@
   "Settings.EyeRest.BackgroundFolder.Title": "배경 이미지 폴더",
   "Settings.EyeRest.BackgroundFolder.Description": "폴더 모드에서는 휴식마다 무작위로 하나가 선택됩니다",
   "Settings.EyeRest.BackgroundFolder.Choose": "폴더 선택",
-  "Settings.EyeRest.OverlayTheme.Title": "휴식 오버레이 스타일",
-  "Settings.EyeRest.OverlayTheme.Description": "휴식 중 화면을 덮는 시각 스타일을 선택하세요",
-  "Settings.EyeRest.OverlayTheme.Glass": "프로스트 글래스",
-  "Settings.EyeRest.OverlayTheme.Ink": "잉크",
-  "Settings.EyeRest.OverlayTheme.Paper": "페이퍼",
-  "Settings.EyeRest.OverlayTheme.Minimal": "미니멀",
   "Tray.EyeRest.ToggleOn": "눈 건강 휴식: 켬",
   "Tray.EyeRest.ToggleOff": "눈 건강 휴식: 끔",
   "Tray.EyeRest.BreakNow": "지금 휴식하기"

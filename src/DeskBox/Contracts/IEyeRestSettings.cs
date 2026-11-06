@@ -74,13 +74,12 @@ public interface IEyeRestSettings
     void SetBackgroundFolder(string path);
 
     /// <summary>
-    /// Reads the persisted overlay theme wire name, normalized (unknown values
-    /// fall back to Glass) so the settings combo never lands off-list.
+    /// One break's resolved overlay surface: the card painted in the app
+    /// window material design language (global material type, opacity,
+    /// intensity and border settings, plus the effective light/dark theme and
+    /// accent), so the overlay never diverges from the widget surfaces.
     /// </summary>
-    string ReadOverlayTheme();
-
-    /// <summary>Persists the overlay theme wire name (normalized on write).</summary>
-    void SetOverlayTheme(string theme);
+    EyeRestOverlaySurface ReadOverlaySurface();
 
     /// <summary>Restores every preference to its default.</summary>
     void ResetPreferences(bool scheduleSave = true);

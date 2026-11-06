@@ -3055,12 +3055,6 @@
   "Settings.EyeRest.BackgroundFolder.Title": "पृष्ठभूमि चित्र फ़ोल्डर",
   "Settings.EyeRest.BackgroundFolder.Description": "फ़ोल्डर मोड में हर ब्रेक पर कोई यादृच्छिक चित्र चुना जाता है",
   "Settings.EyeRest.BackgroundFolder.Choose": "फ़ोल्डर चुनें",
-  "Settings.EyeRest.OverlayTheme.Title": "विश्राम ओवरले शैली",
-  "Settings.EyeRest.OverlayTheme.Description": "विश्राम के दौरान स्क्रीन को ढकने की दृश्य शैली चुनें",
-  "Settings.EyeRest.OverlayTheme.Glass": "फ्रॉस्टेड ग्लास",
-  "Settings.EyeRest.OverlayTheme.Ink": "स्याही",
-  "Settings.EyeRest.OverlayTheme.Paper": "कागज़",
-  "Settings.EyeRest.OverlayTheme.Minimal": "मिनिमल",
   "Tray.EyeRest.ToggleOn": "आँखों की देखभाल ब्रेक: चालू",
   "Tray.EyeRest.ToggleOff": "आँखों की देखभाल ब्रेक: बंद",
   "Tray.EyeRest.BreakNow": "अभी ब्रेक लें"

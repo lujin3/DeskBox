@@ -510,6 +510,5 @@ public sealed class SettingsSliceContractBaselineTests
         "eyeRestBackgroundColor",
         "eyeRestBackgroundImage",
         "eyeRestBackgroundFolder",
-        "eyeRestOverlayTheme",
     ];
 }

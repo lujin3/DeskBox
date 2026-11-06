@@ -41,11 +41,4 @@ public sealed class EyeRestSettingsSlice
 
     /// <summary>Folder scanned for a random image per break when the mode is "Folder".</summary>
     public string EyeRestBackgroundFolder { get; set; } = "";
-
-    /// <summary>
-    /// Break overlay visual theme on the wire: "Glass", "Ink", "Paper" or
-    /// "Minimal". Unknown values fall back to Glass at consumption by
-    /// <c>EyeRestOverlayThemeFactory</c>.
-    /// </summary>
-    public string EyeRestOverlayTheme { get; set; } = "Glass";
 }

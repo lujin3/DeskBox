@@ -3055,12 +3055,6 @@
   "Settings.EyeRest.BackgroundFolder.Title": "Ordner für Hintergrundbilder",
   "Settings.EyeRest.BackgroundFolder.Description": "Im Ordnermodus wird pro Pause ein zufälliges Bild gewählt",
   "Settings.EyeRest.BackgroundFolder.Choose": "Ordner auswählen",
-  "Settings.EyeRest.OverlayTheme.Title": "Overlay-Stil",
-  "Settings.EyeRest.OverlayTheme.Description": "Visuellen Stil der Pausen-Überlagerung wählen",
-  "Settings.EyeRest.OverlayTheme.Glass": "Milchglas",
-  "Settings.EyeRest.OverlayTheme.Ink": "Tinte",
-  "Settings.EyeRest.OverlayTheme.Paper": "Papier",
-  "Settings.EyeRest.OverlayTheme.Minimal": "Minimal",
   "Tray.EyeRest.ToggleOn": "Augenschonende Pausen: an",
   "Tray.EyeRest.ToggleOff": "Augenschonende Pausen: aus",
   "Tray.EyeRest.BreakNow": "Jetzt eine Pause machen"

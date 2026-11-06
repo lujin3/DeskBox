@@ -3055,12 +3055,6 @@
   "Settings.EyeRest.BackgroundFolder.Title": "背景图片文件夹",
   "Settings.EyeRest.BackgroundFolder.Description": "文件夹模式下，每次休息随机选取其中一张图片",
   "Settings.EyeRest.BackgroundFolder.Choose": "选择文件夹",
-  "Settings.EyeRest.OverlayTheme.Title": "休息遮罩样式",
-  "Settings.EyeRest.OverlayTheme.Description": "选择休息时覆盖屏幕的视觉风格",
-  "Settings.EyeRest.OverlayTheme.Glass": "磨砂玻璃",
-  "Settings.EyeRest.OverlayTheme.Ink": "墨黑",
-  "Settings.EyeRest.OverlayTheme.Paper": "纸白",
-  "Settings.EyeRest.OverlayTheme.Minimal": "极简",
   "Tray.EyeRest.ToggleOn": "护眼休息：开",
   "Tray.EyeRest.ToggleOff": "护眼休息：关",
   "Tray.EyeRest.BreakNow": "立即休息"

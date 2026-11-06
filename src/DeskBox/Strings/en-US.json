@@ -3055,12 +3055,6 @@
   "Settings.EyeRest.BackgroundFolder.Title": "Background image folder",
   "Settings.EyeRest.BackgroundFolder.Description": "In folder mode, a random image from this folder is picked for each break",
   "Settings.EyeRest.BackgroundFolder.Choose": "Choose folder",
-  "Settings.EyeRest.OverlayTheme.Title": "Overlay style",
-  "Settings.EyeRest.OverlayTheme.Description": "Choose the visual style of the break overlay",
-  "Settings.EyeRest.OverlayTheme.Glass": "Frosted Glass",
-  "Settings.EyeRest.OverlayTheme.Ink": "Ink",
-  "Settings.EyeRest.OverlayTheme.Paper": "Paper",
-  "Settings.EyeRest.OverlayTheme.Minimal": "Minimal",
   "Tray.EyeRest.ToggleOn": "Eye-rest breaks: on",
   "Tray.EyeRest.ToggleOff": "Eye-rest breaks: off",
   "Tray.EyeRest.BreakNow": "Take a break now"

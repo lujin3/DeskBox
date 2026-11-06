@@ -3055,12 +3055,6 @@
   "Settings.EyeRest.BackgroundFolder.Title": "Dossier d'images de fond",
   "Settings.EyeRest.BackgroundFolder.Description": "En mode dossier, une image aléatoire est choisie à chaque pause",
   "Settings.EyeRest.BackgroundFolder.Choose": "Choisir un dossier",
-  "Settings.EyeRest.OverlayTheme.Title": "Style de l'overlay",
-  "Settings.EyeRest.OverlayTheme.Description": "Choisir le style visuel du voile de pause",
-  "Settings.EyeRest.OverlayTheme.Glass": "Verre dépoli",
-  "Settings.EyeRest.OverlayTheme.Ink": "Encre",
-  "Settings.EyeRest.OverlayTheme.Paper": "Papier",
-  "Settings.EyeRest.OverlayTheme.Minimal": "Minimal",
   "Tray.EyeRest.ToggleOn": "Pauses pour les yeux : activées",
   "Tray.EyeRest.ToggleOff": "Pauses pour les yeux : désactivées",
   "Tray.EyeRest.BreakNow": "Faire une pause maintenant"

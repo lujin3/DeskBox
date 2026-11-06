@@ -3055,12 +3055,6 @@
   "Settings.EyeRest.BackgroundFolder.Title": "Папка фоновых изображений",
   "Settings.EyeRest.BackgroundFolder.Description": "В режиме папки на каждый перерыв выбирается случайное изображение",
   "Settings.EyeRest.BackgroundFolder.Choose": "Выбрать папку",
-  "Settings.EyeRest.OverlayTheme.Title": "Стиль оверлея",
-  "Settings.EyeRest.OverlayTheme.Description": "Выберите визуальный стиль оверлея паузы",
-  "Settings.EyeRest.OverlayTheme.Glass": "Матовое стекло",
-  "Settings.EyeRest.OverlayTheme.Ink": "Чернила",
-  "Settings.EyeRest.OverlayTheme.Paper": "Бумага",
-  "Settings.EyeRest.OverlayTheme.Minimal": "Минимализм",
   "Tray.EyeRest.ToggleOn": "Перерывы для глаз: включены",
   "Tray.EyeRest.ToggleOff": "Перерывы для глаз: выключены",
   "Tray.EyeRest.BreakNow": "Сделать перерыв сейчас"

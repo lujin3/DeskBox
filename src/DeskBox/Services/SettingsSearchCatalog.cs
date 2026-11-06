@@ -101,7 +101,7 @@ internal static class SettingsSearchCatalog
         // EyeRestSettingsSection carries no in-section title card (the
         // FeatureWidgets entry card above covers the section title in
         // search), so this block is
-        // exactly the ten cards of EyeRestSettingsSection.xaml in file order.
+        // exactly the nine cards of EyeRestSettingsSection.xaml in file order.
         new("EyeRestSettings", "Settings.EyeRest.Enable.Title", "Settings.EyeRest.Enable.Description"),
         new("EyeRestSettings", "Settings.EyeRest.WorkInterval.Title", "Settings.EyeRest.WorkInterval.Description"),
         new("EyeRestSettings", "Settings.EyeRest.MiniBreak.Title", "Settings.EyeRest.MiniBreak.Description"),
@@ -111,7 +111,6 @@ internal static class SettingsSearchCatalog
         new("EyeRestSettings", "Settings.EyeRest.BackgroundColor.Title", "Settings.EyeRest.BackgroundColor.Description"),
         new("EyeRestSettings", "Settings.EyeRest.BackgroundImage.Title", "Settings.EyeRest.BackgroundImage.Description"),
         new("EyeRestSettings", "Settings.EyeRest.BackgroundFolder.Title", "Settings.EyeRest.BackgroundFolder.Description"),
-        new("EyeRestSettings", "Settings.EyeRest.OverlayTheme.Title", "Settings.EyeRest.OverlayTheme.Description"),
         new("FileDisplaySettings", "Settings.ShowFileExtensions.Title", "Settings.ShowFileExtensions.Description"),
         new("FileDisplaySettings", "Settings.HideShortcutExtension.Title", "Settings.HideShortcutExtension.Description"),
         new("FileDisplaySettings", "Settings.ShowImageFilesAsIcons.Title", "Settings.ShowImageFilesAsIcons.Description"),

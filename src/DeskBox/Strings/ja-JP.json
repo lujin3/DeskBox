@@ -3055,12 +3055,6 @@
   "Settings.EyeRest.BackgroundFolder.Title": "背景画像フォルダー",
   "Settings.EyeRest.BackgroundFolder.Description": "フォルダーモードでは休憩ごとにランダムに 1 枚選択されます",
   "Settings.EyeRest.BackgroundFolder.Choose": "フォルダーを選択",
-  "Settings.EyeRest.OverlayTheme.Title": "休憩オーバーレイのスタイル",
-  "Settings.EyeRest.OverlayTheme.Description": "休憩中に画面を覆う見た目のスタイルを選びます",
-  "Settings.EyeRest.OverlayTheme.Glass": "フロストガラス",
-  "Settings.EyeRest.OverlayTheme.Ink": "インク",
-  "Settings.EyeRest.OverlayTheme.Paper": "ペーパー",
-  "Settings.EyeRest.OverlayTheme.Minimal": "ミニマル",
   "Tray.EyeRest.ToggleOn": "目の休憩：オン",
   "Tray.EyeRest.ToggleOff": "目の休憩：オフ",
   "Tray.EyeRest.BreakNow": "今すぐ休憩"

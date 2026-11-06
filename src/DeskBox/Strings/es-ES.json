@@ -3055,12 +3055,6 @@
   "Settings.EyeRest.BackgroundFolder.Title": "Carpeta de imágenes de fondo",
   "Settings.EyeRest.BackgroundFolder.Description": "En modo carpeta se elige una imagen aleatoria en cada descanso",
   "Settings.EyeRest.BackgroundFolder.Choose": "Elegir carpeta",
-  "Settings.EyeRest.OverlayTheme.Title": "Estilo del overlay",
-  "Settings.EyeRest.OverlayTheme.Description": "Elige el estilo visual de la superposición de descanso",
-  "Settings.EyeRest.OverlayTheme.Glass": "Cristal esmerilado",
-  "Settings.EyeRest.OverlayTheme.Ink": "Tinta",
-  "Settings.EyeRest.OverlayTheme.Paper": "Papel",
-  "Settings.EyeRest.OverlayTheme.Minimal": "Mínimo",
   "Tray.EyeRest.ToggleOn": "Descansos para la vista: activados",
   "Tray.EyeRest.ToggleOff": "Descansos para la vista: desactivados",
   "Tray.EyeRest.BreakNow": "Descansar ahora"

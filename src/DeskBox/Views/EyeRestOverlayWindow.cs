@@ -16,6 +16,7 @@ using Windows.Foundation;
 using Windows.Graphics;
 using Windows.UI;
 using WinRT.Interop;
+using Path = Microsoft.UI.Xaml.Shapes.Path;
 
 namespace DeskBox.Views;
 
@@ -55,17 +56,18 @@ internal static class EyeRestOverlay
     /// Covers every attached monitor with the break overlay. A topology change
     /// during the break retires the overlays at once (an overlay positioned on
     /// a monitor being reconfigured would sit on stale coordinates or die with
-    /// the monitor). The background is resolved by the caller once per break
-    /// so every monitor shows the same image (a folder mode re-rolls per
-    /// break, not per monitor). The first live overlay takes keyboard focus so
-    /// the Enter/Space resume shortcut works without clicking (Focust focuses
-    /// its primary prompt window for the same reason).
+    /// the monitor). The background and the card surface are resolved by the
+    /// caller once per break so every monitor shows the same image (a folder
+    /// mode re-rolls per break, not per monitor) and the same appearance. The
+    /// first live overlay takes keyboard focus so the Enter/Space resume
+    /// shortcut works without clicking (Focust focuses its primary prompt
+    /// window for the same reason).
     /// </summary>
     public static void ShowAll(
         EyeRestBreakKind kind,
         TimeSpan duration,
         EyeRestBreakBackground background,
-        EyeRestOverlayThemePalette theme,
+        EyeRestOverlaySurface surface,
         LocalizationService localization,
         Action skipRequested)
     {
@@ -89,7 +91,7 @@ internal static class EyeRestOverlay
                 kind,
                 duration,
                 background,
-                theme,
+                surface,
                 screen.Monitor,
                 localization,
                 () => RequestSkip(skipRequested),
@@ -163,19 +165,20 @@ internal static class EyeRestOverlay
 
 /// <summary>
 /// One monitor's break overlay, Focust-style (PromptApp.vue): a full-bleed
-/// background (solid color or image) under a slate dim layer, carrying a
-/// centered frosted-glass card with the kind title, a radial progress ring
-/// around the countdown, a random break suggestion, the prominent green
-/// "back to work" button and a keyboard hint. Enter/Space (or the button)
-/// ends the break immediately through the shared deduplicated skip path —
-/// the primary overlay holds keyboard focus so the shortcut works without
-/// hunting for the button. Window-style surgery copies
-/// <see cref="DisplayIdentifyOverlayWindow"/>: borderless topmost tool window
-/// hidden from Alt-Tab. Unlike the pre-redesign overlay, the topmost band is
-/// actually claimed through <see cref="Win32Helper.SetWindowPos"/>: setting
-/// WS_EX_TOPMOST via SetWindowLong only flips the style bit, it does not
-/// reorder an already created window, so the overlay used to surface in the
-/// normal z-order band.
+/// background (solid color or image) under a dim layer, carrying a centered
+/// card painted in the app window material design language (Mica/Acrylic/Solid
+/// resolved from the global appearance settings, bordered like a widget
+/// surface), a radial progress ring around the countdown, a random break
+/// suggestion, the prominent accent "back to work" button and a keyboard
+/// hint. Enter/Space (or the button) ends the break immediately through the
+/// shared deduplicated skip path — the primary overlay holds keyboard focus
+/// so the shortcut works without hunting for the button. Window-style
+/// surgery copies <see cref="DisplayIdentifyOverlayWindow"/>: borderless
+/// topmost tool window hidden from Alt-Tab. Unlike the pre-redesign overlay,
+/// the topmost band is actually claimed through
+/// <see cref="Win32Helper.SetWindowPos"/>: setting WS_EX_TOPMOST via
+/// SetWindowLong only flips the style bit, it does not reorder an already
+/// created window, so the overlay used to surface in the normal z-order band.
 /// </summary>
 internal sealed class EyeRestOverlayWindow
 {
@@ -211,7 +214,7 @@ internal sealed class EyeRestOverlayWindow
         EyeRestBreakKind kind,
         TimeSpan duration,
         EyeRestBreakBackground background,
-        EyeRestOverlayThemePalette theme,
+        EyeRestOverlaySurface surface,
         RectInt32 monitorBounds,
         LocalizationService localization,
         Action skipRequested,
@@ -228,7 +231,7 @@ internal sealed class EyeRestOverlayWindow
         var title = new TextBlock
         {
             Text = titleText,
-            Foreground = new SolidColorBrush(theme.TitleColor),
+            Foreground = new SolidColorBrush(surface.TitleColor),
             HorizontalAlignment = HorizontalAlignment.Center,
             FontSize = 28,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
@@ -237,7 +240,7 @@ internal sealed class EyeRestOverlayWindow
         _countdownText = new TextBlock
         {
             Text = FormatRemaining(duration),
-            Foreground = new SolidColorBrush(theme.CountdownColor),
+            Foreground = new SolidColorBrush(surface.CountdownColor),
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
             FontSize = 44,
@@ -250,14 +253,14 @@ internal sealed class EyeRestOverlayWindow
         var ringTrack = new Ellipse
         {
             Fill = null,
-            Stroke = new SolidColorBrush(theme.RingTrackColor),
+            Stroke = new SolidColorBrush(surface.RingTrackColor),
             StrokeThickness = RingStroke,
             Margin = new Thickness(RingStroke / 2)
         };
         _ringArc = new Path
         {
             Fill = null,
-            Stroke = new SolidColorBrush(theme.RingArcColor),
+            Stroke = new SolidColorBrush(surface.RingArcColor),
             StrokeThickness = RingStroke,
             StrokeStartLineCap = PenLineCap.Round,
             StrokeEndLineCap = PenLineCap.Round
@@ -275,7 +278,7 @@ internal sealed class EyeRestOverlayWindow
         var tip = new TextBlock
         {
             Text = tipText,
-            Foreground = new SolidColorBrush(theme.TipColor),
+            Foreground = new SolidColorBrush(surface.TipColor),
             HorizontalAlignment = HorizontalAlignment.Center,
             TextAlignment = TextAlignment.Center,
             FontSize = 17,
@@ -286,42 +289,34 @@ internal sealed class EyeRestOverlayWindow
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(tip, tipText);
 
         // The single affordance (deliberately no postpone secondary button):
-        // one prominent action ends the break, mirroring Focust's primary
-        // "resume" button. It routes through the same deduplicated skip path
-        // the retired corner hyperlink used.
+        // one prominent action ends the break. It is the app's own accent
+        // button (AccentButtonStyle + the window-scoped accent resources, the
+        // same scoping ThemeService applies to every app window), so rest,
+        // hover, pressed and the on-accent label follow the app's design
+        // language instead of a bespoke palette — and the label inherits the
+        // templated foreground rather than pinning white, which reads wrong
+        // whenever the accent runs light.
         _resumeButton = new Button
         {
             Content = new TextBlock
             {
                 Text = resumeText,
                 FontSize = 16,
-                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                Foreground = new SolidColorBrush(Colors.White)
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
             },
-            Background = new SolidColorBrush(theme.ButtonColor),
-            Foreground = new SolidColorBrush(theme.ButtonForegroundColor),
+            Style = ResolveAccentButtonStyle(),
             MinWidth = 220,
-            Height = 48,
-            Padding = new Thickness(32, 0, 32, 0),
-            CornerRadius = new CornerRadius(12),
+            Height = 44,
+            Padding = new Thickness(28, 0, 28, 0),
             HorizontalAlignment = HorizontalAlignment.Center
         };
-        // The default button template swaps in the system accent on hover,
-        // which read as a flicker off-theme; element-level theme resource
-        // overrides keep the pointer/pressed states inside the palette.
-        _resumeButton.Resources["ButtonBackgroundPointerOver"] = new SolidColorBrush(theme.ButtonPointerOverColor);
-        _resumeButton.Resources["ButtonBackgroundPressed"] = new SolidColorBrush(theme.ButtonPressedColor);
-        _resumeButton.Resources["ButtonForegroundPointerOver"] = new SolidColorBrush(theme.ButtonForegroundColor);
-        _resumeButton.Resources["ButtonForegroundPressed"] = new SolidColorBrush(theme.ButtonForegroundColor);
-        _resumeButton.Resources["ButtonBorderBrushPointerOver"] = new SolidColorBrush(Colors.Transparent);
-        _resumeButton.Resources["ButtonBorderBrushPressed"] = new SolidColorBrush(Colors.Transparent);
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(_resumeButton, resumeText);
         _resumeButton.Click += (_, _) => skipRequested();
 
         var hint = new TextBlock
         {
             Text = hintText,
-            Foreground = new SolidColorBrush(theme.HintColor),
+            Foreground = new SolidColorBrush(surface.HintColor),
             HorizontalAlignment = HorizontalAlignment.Center,
             FontSize = 12
         };
@@ -348,55 +343,64 @@ internal sealed class EyeRestOverlayWindow
         }
 
         // The dim layer applies in both modes (Focust dims over solid
-        // backgrounds too) so the card text stays readable; its strength is
-        // part of the theme (Minimal dims deeper since it carries no card).
+        // backgrounds too) so the card text stays readable; its strength
+        // follows the effective theme (a light-theme break still dims dark —
+        // the rest screen should emit less light, not more).
         root.Children.Add(new Grid
         {
-            Background = new SolidColorBrush(theme.DimColor),
+            Background = new SolidColorBrush(surface.DimColor),
             IsHitTestVisible = false
         });
 
-        // Theme card surface: frosted acrylic, solid panel, or no card at all
-        // (Minimal floats the content straight on the dim layer). The entrance
-        // animation targets whichever element carries the content.
-        FrameworkElement entranceTarget = cardContent;
-        if (theme.HasCard)
-        {
-            Brush cardBackground = theme.CardAcrylic
-                ? new AcrylicBrush
-                {
-                    TintColor = theme.CardAcrylicTint,
-                    TintOpacity = theme.CardAcrylicTintOpacity,
-                    FallbackColor = theme.CardFallbackColor
-                }
-                : new SolidColorBrush(theme.CardSolidColor);
-            var card = new Border
+        // Theme parity with the app windows: the overlay root follows the
+        // effective light/dark theme (theme resources inside the card, and
+        // the accent button's templated states, resolve accordingly) and the
+        // accent resources carry the effective accent, not the system
+        // default — the same two calls ThemeService.ApplyToWindow makes.
+        root.RequestedTheme = surface.IsDark ? ElementTheme.Dark : ElementTheme.Light;
+        AccentResourceScope.Apply(
+            root,
+            App.Current.ThemeService?.GetEffectiveAccentColor()
+                ?? AccentColorHelper.DefaultAccentColor);
+
+        // The card surface itself follows the widget material design language:
+        // in-app XAML acrylic (a real blur of the dimmed background behind the
+        // card) or the app's translucent embedded tint (mica approximation /
+        // solid), bordered with the same widget border calculator output.
+        Brush cardBackground = surface.CardMaterial == EyeRestOverlayCardMaterial.Acrylic
+            ? new AcrylicBrush
             {
-                Background = cardBackground,
-                BorderBrush = new SolidColorBrush(theme.CardBorderColor),
-                BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(24),
-                Padding = new Thickness(40),
-                MaxWidth = 768,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center,
-                Child = cardContent
-            };
-            entranceTarget = card;
-            root.Children.Add(card);
-        }
-        else
+                TintColor = surface.CardTintColor,
+                TintOpacity = surface.CardTintOpacity,
+                TintLuminosityOpacity = surface.CardLuminosityOpacity,
+                FallbackColor = surface.CardFallbackColor
+            }
+            : new SolidColorBrush(surface.CardTintColor);
+        var card = new Border
         {
-            root.Children.Add(cardContent);
-        }
+            Background = cardBackground,
+            BorderBrush = new SolidColorBrush(surface.CardBorderColor),
+            BorderThickness = new Thickness(surface.CardBorderThickness),
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(40),
+            MaxWidth = 768,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            Child = cardContent
+        };
+        root.Children.Add(card);
+        // The entrance animation targets the card.
+        FrameworkElement entranceTarget = card;
 
         // Keyboard parity with Focust's keydown handler: Enter/Space ends the
         // break. PreviewKeyDown tunnels from the root, so it fires before a
         // focused button turns Enter into a second (deduplicated) click.
+        // (The WinRT VirtualKey projection has no separate numpad-enter
+        // member: the numeric keypad's Enter is the same VK_RETURN, so the
+        // Enter arm already covers it.)
         root.PreviewKeyDown += (_, e) =>
         {
             if (e.Key is Windows.System.VirtualKey.Enter
-                or Windows.System.VirtualKey.NumberPadEnter
                 or Windows.System.VirtualKey.Space)
             {
                 e.Handled = true;
@@ -647,6 +651,17 @@ internal sealed class EyeRestOverlayWindow
         geometry.Figures.Add(figure);
         _ringArc.Data = geometry;
     }
+
+    /// <summary>
+    /// The app's accent button style (ManagedStorageMigrationDialog precedent
+    /// for the resource lookup). A failed lookup falls back to the default
+    /// button template, which keeps the resume affordance functional.
+    /// </summary>
+    private static Style? ResolveAccentButtonStyle() =>
+        Application.Current.Resources.TryGetValue("AccentButtonStyle", out object? resource) &&
+        resource is Style style
+            ? style
+            : null;
 
     /// <summary>
     /// Full-bleed cover image. The decode is bounded to the monitor's physical

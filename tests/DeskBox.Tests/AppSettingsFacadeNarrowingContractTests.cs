@@ -73,9 +73,7 @@ public sealed class AppSettingsFacadeNarrowingContractTests
         // +4 = eye-rest break background (mode, solid color, image path,
         // folder path; additive — absent files deserialize to the solid
         // mode with the built-in dark color and empty paths).
-        // +1 = eye-rest overlay theme wire name (additive — absent files
-        // deserialize to the Glass default).
-        Assert.Equal(253, Passthroughs.Length);
+        Assert.Equal(252, Passthroughs.Length);
         Assert.Equal(14, SliceAccessors.Length);
     }
 
@@ -83,7 +81,7 @@ public sealed class AppSettingsFacadeNarrowingContractTests
     public void EveryPassthrough_IsAFrozenSchemaMember_AndViceVersa()
     {
         // The facade IS the schema: with the WhenWritingNull member forced on,
-        // the serialized member set is exactly schemaVersion plus the 253
+        // the serialized member set is exactly schemaVersion plus the 252
         // passthrough wire names (camelCase unless a JsonPropertyName
         // overrides it). This proves there is no dead passthrough sitting
         // outside the wire, and no wire member without a passthrough owner.
@@ -93,7 +91,7 @@ public sealed class AppSettingsFacadeNarrowingContractTests
         expected.Add("schemaVersion");
         Assert.True(
             SerializedMemberNames.SetEquals(expected),
-            "Serialized member set must equal schemaVersion + the 253 passthrough wire names.");
+            "Serialized member set must equal schemaVersion + the 252 passthrough wire names.");
         Assert.Equal(254, SerializedMemberNames.Count);
     }
 

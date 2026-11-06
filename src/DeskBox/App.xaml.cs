@@ -2818,13 +2818,15 @@ public partial class App : Application
             case EyeRestBreakEventKind.BreakDue:
                 // Skip marshals back into the timer session on the UI thread
                 // (SkipEyeRestBreak), whose BreakEnded event closes the overlay.
-                // The background resolves here, once per break, so a folder
-                // mode re-rolls per break and every monitor shares one image.
+                // The background and card surface resolve here, once per
+                // break, so a folder mode re-rolls per break, every monitor
+                // shares one image, and appearance edits land on the next
+                // break.
                 EyeRestOverlay.ShowAll(
                     @event.BreakKind,
                     @event.Remaining,
                     _eyeRestSettings!.ReadBreakBackground(),
-                    EyeRestOverlayThemeFactory.Resolve(_eyeRestSettings.ReadOverlayTheme()),
+                    _eyeRestSettings.ReadOverlaySurface(),
                     LocalizationService,
                     SkipEyeRestBreak);
                 break;
