@@ -844,4 +844,16 @@ public class AppSettings
 
     /// <inheritdoc cref="EyeRestSettingsSlice.EyeRestLongBreakEveryMiniBreaks"/>
     public int EyeRestLongBreakEveryMiniBreaks { get => EyeRest.EyeRestLongBreakEveryMiniBreaks; set => EyeRest.EyeRestLongBreakEveryMiniBreaks = value; }
+
+    /// <inheritdoc cref="EyeRestSettingsSlice.EyeRestBackgroundMode"/>
+    public string EyeRestBackgroundMode { get => EyeRest.EyeRestBackgroundMode; set => EyeRest.EyeRestBackgroundMode = value; }
+
+    /// <inheritdoc cref="EyeRestSettingsSlice.EyeRestBackgroundColor"/>
+    public string EyeRestBackgroundColor { get => EyeRest.EyeRestBackgroundColor; set => EyeRest.EyeRestBackgroundColor = value; }
+
+    /// <inheritdoc cref="EyeRestSettingsSlice.EyeRestBackgroundImage"/>
+    public string EyeRestBackgroundImage { get => EyeRest.EyeRestBackgroundImage; set => EyeRest.EyeRestBackgroundImage = value; }
+
+    /// <inheritdoc cref="EyeRestSettingsSlice.EyeRestBackgroundFolder"/>
+    public string EyeRestBackgroundFolder { get => EyeRest.EyeRestBackgroundFolder; set => EyeRest.EyeRestBackgroundFolder = value; }
 }

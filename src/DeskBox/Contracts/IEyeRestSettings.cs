@@ -14,6 +14,18 @@ public readonly record struct EyeRestRuntimeSettings(bool Enabled, EyeRestBreakS
 }
 
 /// <summary>
+/// Raw, unresolved break background preferences: the settings UI displays
+/// these verbatim (a Folder mode with an empty folder must keep showing
+/// "Folder"), while <see cref="IEyeRestSettings.ReadBreakBackground"/> hands
+/// the runtime the resolved per-break background.
+/// </summary>
+public sealed record EyeRestBackgroundPreferences(
+    string Mode,
+    string ColorHex,
+    string ImagePath,
+    string FolderPath);
+
+/// <summary>
 /// One writer for the eye-rest break preferences (14th settings slice).
 /// Preference writes schedule a debounced save and reconcile the runtime
 /// directly; external settings changes (second settings host, hand-edited
@@ -24,6 +36,9 @@ public interface IEyeRestSettings
 {
     /// <summary>Current enablement and clamped schedule.</summary>
     EyeRestRuntimeSettings Read();
+
+    /// <summary>Raw background preferences for settings UI display.</summary>
+    EyeRestBackgroundPreferences ReadBackgroundPreferences();
 
     /// <summary>Master enablement. Persisted before the runtime is reconciled.</summary>
     Task SetEnabledAsync(bool enabled, CancellationToken cancellationToken = default);
@@ -39,6 +54,24 @@ public interface IEyeRestSettings
 
     /// <summary>Mini breaks before a long break. Clamped to 1–12.</summary>
     void SetLongBreakEveryMiniBreaks(int count);
+
+    /// <summary>
+    /// One break's resolved overlay background: solid color or image path
+    /// (a Folder mode picks a random image per call).
+    /// </summary>
+    EyeRestBreakBackground ReadBreakBackground();
+
+    /// <summary>Overlay background mode on the wire: "Solid", "Image" or "Folder". Unknown values normalize to "Solid".</summary>
+    void SetBackgroundMode(string mode);
+
+    /// <summary>Solid-mode overlay color. Invalid hex normalizes to the built-in default.</summary>
+    void SetBackgroundColor(string colorHex);
+
+    /// <summary>Absolute path of the single background image (Image mode).</summary>
+    void SetBackgroundImage(string path);
+
+    /// <summary>Folder scanned for a random background image per break (Folder mode).</summary>
+    void SetBackgroundFolder(string path);
 
     /// <summary>Restores every preference to its default.</summary>
     void ResetPreferences(bool scheduleSave = true);

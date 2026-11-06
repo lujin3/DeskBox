@@ -103,6 +103,51 @@ public sealed class EyeRestSettingsCoordinator : IEyeRestSettings
             EyeRestBreakScheduleFactory.MinLongBreakEveryMiniBreaks,
             EyeRestBreakScheduleFactory.MaxLongBreakEveryMiniBreaks);
 
+    public EyeRestBreakBackground ReadBreakBackground()
+    {
+        EyeRestBackgroundPreferences preferences = ReadBackgroundPreferences();
+        return EyeRestBreakBackgroundFactory.Resolve(
+            preferences.Mode,
+            preferences.ColorHex,
+            preferences.ImagePath,
+            preferences.FolderPath,
+            message => App.Log(message));
+    }
+
+    public EyeRestBackgroundPreferences ReadBackgroundPreferences()
+    {
+        EyeRestSettingsSlice eyeRest = _settings.Settings.EyeRest;
+        return new EyeRestBackgroundPreferences(
+            EyeRestBreakBackgroundFactory.NormalizeMode(eyeRest.EyeRestBackgroundMode),
+            EyeRestBreakBackgroundFactory.NormalizeColorHex(eyeRest.EyeRestBackgroundColor),
+            eyeRest.EyeRestBackgroundImage,
+            eyeRest.EyeRestBackgroundFolder);
+    }
+
+    public void SetBackgroundMode(string mode) =>
+        SetStringPreference(
+            eyeRest => eyeRest.EyeRestBackgroundMode,
+            (eyeRest, value) => eyeRest.EyeRestBackgroundMode = value,
+            EyeRestBreakBackgroundFactory.NormalizeMode(mode));
+
+    public void SetBackgroundColor(string colorHex) =>
+        SetStringPreference(
+            eyeRest => eyeRest.EyeRestBackgroundColor,
+            (eyeRest, value) => eyeRest.EyeRestBackgroundColor = value,
+            EyeRestBreakBackgroundFactory.NormalizeColorHex(colorHex));
+
+    public void SetBackgroundImage(string path) =>
+        SetStringPreference(
+            eyeRest => eyeRest.EyeRestBackgroundImage,
+            (eyeRest, value) => eyeRest.EyeRestBackgroundImage = value,
+            path ?? string.Empty);
+
+    public void SetBackgroundFolder(string path) =>
+        SetStringPreference(
+            eyeRest => eyeRest.EyeRestBackgroundFolder,
+            (eyeRest, value) => eyeRest.EyeRestBackgroundFolder = value,
+            path ?? string.Empty);
+
     public void ResetPreferences(bool scheduleSave = true)
     {
         ObjectDisposedException.ThrowIf(_stopped, this);
@@ -112,6 +157,10 @@ public sealed class EyeRestSettingsCoordinator : IEyeRestSettings
         eyeRest.EyeRestMiniBreakSeconds = 20;
         eyeRest.EyeRestLongBreakMinutes = 5;
         eyeRest.EyeRestLongBreakEveryMiniBreaks = 4;
+        eyeRest.EyeRestBackgroundMode = EyeRestBreakBackgroundFactory.ModeSolid;
+        eyeRest.EyeRestBackgroundColor = EyeRestBreakBackground.DefaultColorHex;
+        eyeRest.EyeRestBackgroundImage = string.Empty;
+        eyeRest.EyeRestBackgroundFolder = string.Empty;
         if (scheduleSave)
         {
             _updatingPreferences = true;
@@ -166,6 +215,37 @@ public sealed class EyeRestSettingsCoordinator : IEyeRestSettings
         }
 
         Reconcile(Read());
+    }
+
+    /// <summary>
+    /// String preference twin of <see cref="SetPreference"/>: the raw value is
+    /// already normalized by the factory (mode/color) or accepted verbatim
+    /// (paths); equal current values are no-ops. Background preferences never
+    /// reach the runtime reconcile inputs — they only repaint the next break's
+    /// overlay — so no timer churn on writes.
+    /// </summary>
+    private void SetStringPreference(
+        Func<EyeRestSettingsSlice, string> readValue,
+        Action<EyeRestSettingsSlice, string> apply,
+        string normalizedValue)
+    {
+        ObjectDisposedException.ThrowIf(_stopped, this);
+        EyeRestSettingsSlice eyeRest = _settings.Settings.EyeRest;
+        if (string.Equals(readValue(eyeRest), normalizedValue, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        apply(eyeRest, normalizedValue);
+        _updatingPreferences = true;
+        try
+        {
+            _settings.SaveDebounced();
+        }
+        finally
+        {
+            _updatingPreferences = false;
+        }
     }
 
     private void OnSettingsChanged()

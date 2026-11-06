@@ -101,12 +101,16 @@ internal static class SettingsSearchCatalog
         new("Displays", "Settings.Displays.Disconnect.Header", "Settings.Displays.Disconnect.Description"),
         // EyeRestSettingsSection carries no in-section title card (the General
         // nav card above covers the section title in search), so this block is
-        // exactly the five cards of EyeRestSettingsSection.xaml in file order.
+        // exactly the nine cards of EyeRestSettingsSection.xaml in file order.
         new("EyeRestSettings", "Settings.EyeRest.Enable.Title", "Settings.EyeRest.Enable.Description"),
         new("EyeRestSettings", "Settings.EyeRest.WorkInterval.Title", "Settings.EyeRest.WorkInterval.Description"),
         new("EyeRestSettings", "Settings.EyeRest.MiniBreak.Title", "Settings.EyeRest.MiniBreak.Description"),
         new("EyeRestSettings", "Settings.EyeRest.LongBreak.Title", "Settings.EyeRest.LongBreak.Description"),
         new("EyeRestSettings", "Settings.EyeRest.LongEvery.Title", "Settings.EyeRest.LongEvery.Description"),
+        new("EyeRestSettings", "Settings.EyeRest.Background.Title", "Settings.EyeRest.Background.Description"),
+        new("EyeRestSettings", "Settings.EyeRest.BackgroundColor.Title", "Settings.EyeRest.BackgroundColor.Description"),
+        new("EyeRestSettings", "Settings.EyeRest.BackgroundImage.Title", "Settings.EyeRest.BackgroundImage.Description"),
+        new("EyeRestSettings", "Settings.EyeRest.BackgroundFolder.Title", "Settings.EyeRest.BackgroundFolder.Description"),
         new("FileDisplaySettings", "Settings.ShowFileExtensions.Title", "Settings.ShowFileExtensions.Description"),
         new("FileDisplaySettings", "Settings.HideShortcutExtension.Title", "Settings.HideShortcutExtension.Description"),
         new("FileDisplaySettings", "Settings.ShowImageFilesAsIcons.Title", "Settings.ShowImageFilesAsIcons.Description"),

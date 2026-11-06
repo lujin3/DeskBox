@@ -506,5 +506,9 @@ public sealed class SettingsSliceContractBaselineTests
         "eyeRestMiniBreakSeconds",
         "eyeRestLongBreakMinutes",
         "eyeRestLongBreakEveryMiniBreaks",
+        "eyeRestBackgroundMode",
+        "eyeRestBackgroundColor",
+        "eyeRestBackgroundImage",
+        "eyeRestBackgroundFolder",
     ];
 }

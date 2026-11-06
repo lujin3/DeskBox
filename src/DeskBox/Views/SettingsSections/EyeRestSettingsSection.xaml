@@ -15,7 +15,7 @@
     </UserControl.Resources>
 
     <!-- Pure code-behind on purpose (DisplaySettingsSection precedent): the
-         five controls map 1:1 onto IEyeRestSettings, whose setters already
+         nine cards map 1:1 onto IEyeRestSettings, whose setters already
          persist, clamp, and reconcile the runtime. -->
     <StackPanel Style="{StaticResource SectionPanelStyle}">
         <toolkit:SettingsCard
@@ -104,6 +104,116 @@
                 SmallChange="1"
                 LargeChange="1"
                 ValueChanged="LongEveryBox_ValueChanged" />
+        </toolkit:SettingsCard>
+
+        <toolkit:SettingsCard
+            x:Name="BackgroundModeCard"
+            HorizontalContentAlignment="Right"
+            svc:Localized.DescriptionKey="Settings.EyeRest.Background.Description"
+            svc:Localized.HeaderKey="Settings.EyeRest.Background.Title">
+            <toolkit:SettingsCard.HeaderIcon>
+                <FontIcon Glyph="&#xE771;" />
+            </toolkit:SettingsCard.HeaderIcon>
+            <ComboBox
+                x:Name="BackgroundModeComboBox"
+                MinWidth="{StaticResource SettingsControlMinWidth}"
+                SelectionChanged="BackgroundModeComboBox_SelectionChanged" />
+        </toolkit:SettingsCard>
+
+        <toolkit:SettingsCard
+            x:Name="BackgroundColorCard"
+            HorizontalContentAlignment="Right"
+            svc:Localized.DescriptionKey="Settings.EyeRest.BackgroundColor.Description"
+            svc:Localized.HeaderKey="Settings.EyeRest.BackgroundColor.Title">
+            <toolkit:SettingsCard.HeaderIcon>
+                <FontIcon Glyph="&#xE790;" />
+            </toolkit:SettingsCard.HeaderIcon>
+            <Button
+                x:Name="BackgroundColorButton"
+                Padding="0"
+                Style="{StaticResource ActionButtonStyle}"
+                svc:Localized.AutomationNameKey="Settings.EyeRest.BackgroundColor.Title">
+                <Border
+                    x:Name="BackgroundColorSwatch"
+                    Width="56"
+                    Height="28"
+                    Background="#161618"
+                    CornerRadius="4" />
+                <Button.Flyout>
+                    <Flyout Placement="Bottom">
+                        <ColorPicker
+                            x:Name="BackgroundColorPicker"
+                            IsAlphaEnabled="False"
+                            IsColorSliderVisible="True"
+                            IsColorSpectrumVisible="True"
+                            IsMoreButtonVisible="True"
+                            ColorChanged="BackgroundColorPicker_ColorChanged" />
+                    </Flyout>
+                </Button.Flyout>
+            </Button>
+        </toolkit:SettingsCard>
+
+        <toolkit:SettingsCard
+            x:Name="BackgroundImageCard"
+            HorizontalContentAlignment="Right"
+            svc:Localized.DescriptionKey="Settings.EyeRest.BackgroundImage.Description"
+            svc:Localized.HeaderKey="Settings.EyeRest.BackgroundImage.Title">
+            <toolkit:SettingsCard.HeaderIcon>
+                <FontIcon Glyph="&#xEB9F;" />
+            </toolkit:SettingsCard.HeaderIcon>
+            <StackPanel
+                HorizontalAlignment="Right"
+                Orientation="Vertical"
+                Spacing="6">
+                <Button
+                    Click="ChooseBackgroundImageButton_Click"
+                    Style="{StaticResource ActionButtonStyle}"
+                    svc:Localized.AutomationNameKey="Settings.EyeRest.BackgroundImage.Choose">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <FontIcon FontSize="16" Glyph="&#xE8E5;" />
+                        <TextBlock svc:Localized.Key="Settings.EyeRest.BackgroundImage.Choose" />
+                    </StackPanel>
+                </Button>
+                <TextBlock
+                    x:Name="BackgroundImagePathText"
+                    MaxWidth="{StaticResource SettingsControlMinWidth}"
+                    HorizontalAlignment="Right"
+                    FontSize="12"
+                    Opacity="0.7"
+                    TextAlignment="Right"
+                    TextTrimming="CharacterEllipsis" />
+            </StackPanel>
+        </toolkit:SettingsCard>
+
+        <toolkit:SettingsCard
+            x:Name="BackgroundFolderCard"
+            HorizontalContentAlignment="Right"
+            svc:Localized.DescriptionKey="Settings.EyeRest.BackgroundFolder.Description"
+            svc:Localized.HeaderKey="Settings.EyeRest.BackgroundFolder.Title">
+            <toolkit:SettingsCard.HeaderIcon>
+                <FontIcon Glyph="&#xE8B7;" />
+            </toolkit:SettingsCard.HeaderIcon>
+            <StackPanel
+                HorizontalAlignment="Right"
+                Orientation="Vertical"
+                Spacing="6">
+                <Button
+                    Click="ChooseBackgroundFolderButton_Click"
+                    Style="{StaticResource ActionButtonStyle}"
+                    svc:Localized.AutomationNameKey="Settings.EyeRest.BackgroundFolder.Choose">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <FontIcon FontSize="16" Glyph="&#xE838;" />
+                        <TextBlock svc:Localized.Key="Settings.EyeRest.BackgroundFolder.Choose" />
+                    </StackPanel>
+                </Button>
+                <TextBlock
+                    x:Name="BackgroundFolderPathText"
+                    MaxWidth="{StaticResource SettingsControlMinWidth}"
+                    HorizontalAlignment="Right"
+                    FontSize="12"
+                    Opacity="0.7"
+                    TextTrimming="CharacterEllipsis" />
+            </StackPanel>
         </toolkit:SettingsCard>
     </StackPanel>
 </UserControl>

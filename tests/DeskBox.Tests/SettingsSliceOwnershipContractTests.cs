@@ -51,7 +51,10 @@ public sealed class SettingsSliceOwnershipContractTests
         // +5 = eye-rest break slice (enabled/work-interval/mini-break-length/
         // long-break-length/mini-breaks-per-long-break; additive — absent
         // files deserialize to the disabled default with 20/20/5/4 cadence).
-        Assert.Equal(248, FacadeProperties.Length);
+        // +4 = eye-rest break background (mode/solid-color/image-path/
+        // folder-path; additive — absent files deserialize to the solid
+        // mode with the built-in dark color and empty paths).
+        Assert.Equal(252, FacadeProperties.Length);
 
         foreach (PropertyInfo facade in FacadeProperties)
         {

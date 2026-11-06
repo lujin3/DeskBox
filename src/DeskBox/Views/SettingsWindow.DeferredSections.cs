@@ -101,7 +101,7 @@ public sealed partial class SettingsWindow
                 displaySettings.Configure(_widgetActions, _appActions);
                 break;
             case EyeRestSettingsSection eyeRestSettings:
-                eyeRestSettings.Configure(_eyeRestSettings);
+                eyeRestSettings.Configure(_eyeRestSettings, _hWnd);
                 break;
             case DesktopOrganizationSettingsSection organizationSettings:
                 organizationSettings.Configure(_widgetActions, _appActions, _hWnd);
