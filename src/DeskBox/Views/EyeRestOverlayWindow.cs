@@ -8,8 +8,11 @@ using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.UI.Xaml.Media.Imaging;
+using Microsoft.UI.Xaml.Shapes;
 using System.Runtime.InteropServices;
+using Windows.Foundation;
 using Windows.Graphics;
 using Windows.UI;
 using WinRT.Interop;
@@ -20,11 +23,15 @@ namespace DeskBox.Views;
 /// Manager for the eye-rest break overlay: one opaque borderless topmost
 /// window per attached monitor. Opaque by design — a transparent top-level
 /// XAML window renders black (see <see cref="DisplayIdentifyOverlayWindow"/>),
-/// so dimming comes from the layered-window alpha, not the brush.
+/// and the break must hide the desktop completely, so the layered-window alpha
+/// is fully opaque (no see-through of desktop text under the background).
 /// </summary>
 internal static class EyeRestOverlay
 {
-    private const int TipCountPerKind = 4;
+    // 16 tips per break kind (EyeRest.Tip.Mini.1..16 / Long.1..16): a wide
+    // randomized pool keeps consecutive breaks feeling fresh instead of
+    // cycling through four lines.
+    private const int TipCountPerKind = 16;
 
     // Registry is internal (not private) so the sibling window class can
     // register/unregister itself — same-assembly only.
@@ -50,12 +57,15 @@ internal static class EyeRestOverlay
     /// a monitor being reconfigured would sit on stale coordinates or die with
     /// the monitor). The background is resolved by the caller once per break
     /// so every monitor shows the same image (a folder mode re-rolls per
-    /// break, not per monitor).
+    /// break, not per monitor). The first live overlay takes keyboard focus so
+    /// the Enter/Space resume shortcut works without clicking (Focust focuses
+    /// its primary prompt window for the same reason).
     /// </summary>
     public static void ShowAll(
         EyeRestBreakKind kind,
         TimeSpan duration,
         EyeRestBreakBackground background,
+        EyeRestOverlayThemePalette theme,
         LocalizationService localization,
         Action skipRequested)
     {
@@ -72,20 +82,24 @@ internal static class EyeRestOverlay
             s_skipRequested = false;
         }
 
+        EyeRestOverlayWindow? primary = null;
         foreach (WidgetScreenInfo screen in WidgetScreenCatalog.Capture())
         {
             var overlay = new EyeRestOverlayWindow(
                 kind,
                 duration,
                 background,
+                theme,
                 screen.Monitor,
-                screen.EffectiveDpiScale,
                 localization,
-                () => RequestSkip(skipRequested));
+                () => RequestSkip(skipRequested),
+                takesFocus: primary is null);
             if (overlay.IsClosed)
             {
                 continue;
             }
+
+            primary ??= overlay;
         }
     }
 
@@ -148,34 +162,46 @@ internal static class EyeRestOverlay
 }
 
 /// <summary>
-/// One monitor's break overlay, Focust-style: a full-screen background (solid
-/// color or image with a dim layer) with a centered rounded card holding the
-/// kind label, big countdown, a random break suggestion, a remaining-time
-/// progress bar, and one prominent "back to work" button that ends the break
-/// immediately (skip). Window-style surgery copies
+/// One monitor's break overlay, Focust-style (PromptApp.vue): a full-bleed
+/// background (solid color or image) under a slate dim layer, carrying a
+/// centered frosted-glass card with the kind title, a radial progress ring
+/// around the countdown, a random break suggestion, the prominent green
+/// "back to work" button and a keyboard hint. Enter/Space (or the button)
+/// ends the break immediately through the shared deduplicated skip path —
+/// the primary overlay holds keyboard focus so the shortcut works without
+/// hunting for the button. Window-style surgery copies
 /// <see cref="DisplayIdentifyOverlayWindow"/>: borderless topmost tool window
-/// that never activates and is hidden from Alt-Tab. Unlike the pre-redesign
-/// overlay, the topmost band is actually claimed through
-/// <see cref="Win32Helper.SetWindowPos"/>: setting WS_EX_TOPMOST via
-/// SetWindowLong only flips the style bit, it does not reorder an already
-/// created window, so the overlay used to surface in the normal z-order band.
+/// hidden from Alt-Tab. Unlike the pre-redesign overlay, the topmost band is
+/// actually claimed through <see cref="Win32Helper.SetWindowPos"/>: setting
+/// WS_EX_TOPMOST via SetWindowLong only flips the style bit, it does not
+/// reorder an already created window, so the overlay used to surface in the
+/// normal z-order band.
 /// </summary>
 internal sealed class EyeRestOverlayWindow
 {
-    private const byte OverlayAlpha = 0xF2; // ~95%: nearly opaque, a hint of the desktop behind
+    // Fully opaque: the break is meant to hide the desktop entirely — any
+    // layered alpha below 0xFF lets desktop text bleed through the background.
+    private const byte OverlayAlpha = 0xFF;
 
-    // Focust-flavored card palette; the card floats over the background with a
-    // translucent dark scrim so both solid and image modes stay readable.
-    private static readonly Color CardBackgroundColor = Color.FromArgb(0x80, 0x14, 0x14, 0x19);
-    private static readonly Color CardBorderColor = Color.FromArgb(0x26, 0xFF, 0xFF, 0xFF);
-    private static readonly Color ImageDimColor = Color.FromArgb(0x59, 0x0F, 0x17, 0x2A);
-    private static readonly Color ResumeButtonColor = Color.FromArgb(0xFF, 0x16, 0xA3, 0x4A);
+    // Focust's radial ring: a 200px circle with a 10px stroke, elapsed arc in
+    // near-white over a faint track, countdown centered inside.
+    private const double RingSize = 200;
+    private const double RingStroke = 10;
+    private const double RingCenter = RingSize / 2;
+    private const double RingRadius = (RingSize - RingStroke) / 2;
+
+    // Entrance choreography: the content fades in while settling from 96%
+    // scale, so the break surfaces instead of popping (Focust transitions its
+    // card on mount the same way).
+    private static readonly TimeSpan EntranceDuration = TimeSpan.FromMilliseconds(240);
+    private const double EntranceScale = 0.96;
 
     private readonly Window _window;
     private readonly AppWindow _appWindow;
     private readonly IntPtr _hWnd;
     private readonly TextBlock _countdownText;
-    private readonly ProgressBar _remainingBar;
+    private readonly Path _ringArc;
+    private readonly Button _resumeButton;
     private readonly TimeSpan _duration;
     private bool _closed;
 
@@ -185,10 +211,11 @@ internal sealed class EyeRestOverlayWindow
         EyeRestBreakKind kind,
         TimeSpan duration,
         EyeRestBreakBackground background,
+        EyeRestOverlayThemePalette theme,
         RectInt32 monitorBounds,
-        double dpiScale,
         LocalizationService localization,
-        Action skipRequested)
+        Action skipRequested,
+        bool takesFocus)
     {
         _duration = duration;
         string titleText = localization.T(kind == EyeRestBreakKind.Long
@@ -196,105 +223,120 @@ internal sealed class EyeRestOverlayWindow
             : "EyeRest.Overlay.MiniTitle");
         string tipText = localization.T(EyeRestOverlay.PickTipKey(kind));
         string resumeText = localization.T("EyeRest.Overlay.Resume");
-
-        // The countdown's PHYSICAL height targets ~9% of the monitor (clamped
-        // so tiny/large panels stay sane). FontSize is in DIPs and the window
-        // renders at this monitor's DPI, so convert px → DIP by dividing by
-        // the per-monitor scale, then px height → font size via 72/96 = 0.75.
-        double countdownHeightPx = Math.Clamp(monitorBounds.Height * 0.09, 40, 160);
-        double dipHeight = countdownHeightPx / (dpiScale > 0 ? dpiScale : 1.0);
-
-        _countdownText = new TextBlock
-        {
-            Text = FormatRemaining(duration),
-            Foreground = new SolidColorBrush(Colors.White),
-            HorizontalAlignment = HorizontalAlignment.Center,
-            FontSize = dipHeight * 0.75,
-            FontWeight = Microsoft.UI.Text.FontWeights.SemiLight
-        };
+        string hintText = localization.T("EyeRest.Overlay.ResumeHint");
 
         var title = new TextBlock
         {
             Text = titleText,
-            Foreground = new SolidColorBrush(Color.FromArgb(0xE6, 0xFF, 0xFF, 0xFF)),
+            Foreground = new SolidColorBrush(theme.TitleColor),
             HorizontalAlignment = HorizontalAlignment.Center,
-            FontSize = Math.Clamp(dipHeight * 0.30, 14, 48),
+            FontSize = 28,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
         };
+
+        _countdownText = new TextBlock
+        {
+            Text = FormatRemaining(duration),
+            Foreground = new SolidColorBrush(theme.CountdownColor),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            FontSize = 44,
+            FontWeight = Microsoft.UI.Text.FontWeights.Bold
+        };
+
+        // The track is an inset ellipse (its stroke is center-aligned, so the
+        // margin keeps the outer half of the stroke inside the element box);
+        // the elapsed arc is a Path rebuilt per tick in UpdateRing.
+        var ringTrack = new Ellipse
+        {
+            Fill = null,
+            Stroke = new SolidColorBrush(theme.RingTrackColor),
+            StrokeThickness = RingStroke,
+            Margin = new Thickness(RingStroke / 2)
+        };
+        _ringArc = new Path
+        {
+            Fill = null,
+            Stroke = new SolidColorBrush(theme.RingArcColor),
+            StrokeThickness = RingStroke,
+            StrokeStartLineCap = PenLineCap.Round,
+            StrokeEndLineCap = PenLineCap.Round
+        };
+        var ring = new Grid
+        {
+            Width = RingSize,
+            Height = RingSize,
+            HorizontalAlignment = HorizontalAlignment.Center
+        };
+        ring.Children.Add(ringTrack);
+        ring.Children.Add(_ringArc);
+        ring.Children.Add(_countdownText);
 
         var tip = new TextBlock
         {
             Text = tipText,
-            Foreground = new SolidColorBrush(Color.FromArgb(0xCC, 0xC8, 0xC8, 0xCC)),
+            Foreground = new SolidColorBrush(theme.TipColor),
             HorizontalAlignment = HorizontalAlignment.Center,
             TextAlignment = TextAlignment.Center,
-            FontSize = Math.Clamp(dipHeight * 0.24, 12, 32),
+            FontSize = 17,
+            FontWeight = Microsoft.UI.Text.FontWeights.Medium,
             TextWrapping = TextWrapping.Wrap,
-            MaxWidth = Math.Clamp(monitorBounds.Width * 0.6, 240, 1200) / (dpiScale > 0 ? dpiScale : 1.0)
+            MaxWidth = 560
         };
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(tip, tipText);
-
-        _remainingBar = new ProgressBar
-        {
-            Minimum = 0,
-            Maximum = 1,
-            Value = 1,
-            Width = Math.Clamp(dipHeight * 2.4, 220, 420),
-            Height = 4,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            Foreground = new SolidColorBrush(Color.FromArgb(0xB3, 0xFF, 0xFF, 0xFF)),
-            Background = new SolidColorBrush(Color.FromArgb(0x33, 0xFF, 0xFF, 0xFF)),
-            CornerRadius = new CornerRadius(2)
-        };
 
         // The single affordance (deliberately no postpone secondary button):
         // one prominent action ends the break, mirroring Focust's primary
         // "resume" button. It routes through the same deduplicated skip path
         // the retired corner hyperlink used.
-        var resumeButton = new Button
+        _resumeButton = new Button
         {
             Content = new TextBlock
             {
                 Text = resumeText,
-                FontSize = Math.Clamp(dipHeight * 0.28, 15, 22),
+                FontSize = 16,
                 FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
                 Foreground = new SolidColorBrush(Colors.White)
             },
-            Background = new SolidColorBrush(ResumeButtonColor),
-            Foreground = new SolidColorBrush(Colors.White),
-            MinWidth = Math.Clamp(dipHeight * 2.0, 200, 320),
-            Height = Math.Clamp(dipHeight * 0.52, 42, 60),
+            Background = new SolidColorBrush(theme.ButtonColor),
+            Foreground = new SolidColorBrush(theme.ButtonForegroundColor),
+            MinWidth = 220,
+            Height = 48,
             Padding = new Thickness(32, 0, 32, 0),
             CornerRadius = new CornerRadius(12),
             HorizontalAlignment = HorizontalAlignment.Center
         };
-        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(resumeButton, resumeText);
-        resumeButton.Click += (_, _) => skipRequested();
+        // The default button template swaps in the system accent on hover,
+        // which read as a flicker off-theme; element-level theme resource
+        // overrides keep the pointer/pressed states inside the palette.
+        _resumeButton.Resources["ButtonBackgroundPointerOver"] = new SolidColorBrush(theme.ButtonPointerOverColor);
+        _resumeButton.Resources["ButtonBackgroundPressed"] = new SolidColorBrush(theme.ButtonPressedColor);
+        _resumeButton.Resources["ButtonForegroundPointerOver"] = new SolidColorBrush(theme.ButtonForegroundColor);
+        _resumeButton.Resources["ButtonForegroundPressed"] = new SolidColorBrush(theme.ButtonForegroundColor);
+        _resumeButton.Resources["ButtonBorderBrushPointerOver"] = new SolidColorBrush(Colors.Transparent);
+        _resumeButton.Resources["ButtonBorderBrushPressed"] = new SolidColorBrush(Colors.Transparent);
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(_resumeButton, resumeText);
+        _resumeButton.Click += (_, _) => skipRequested();
+
+        var hint = new TextBlock
+        {
+            Text = hintText,
+            Foreground = new SolidColorBrush(theme.HintColor),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            FontSize = 12
+        };
 
         var cardContent = new StackPanel
         {
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
-            Spacing = Math.Clamp(dipHeight * 0.18, 10, 32)
+            Spacing = 24
         };
         cardContent.Children.Add(title);
-        cardContent.Children.Add(_countdownText);
+        cardContent.Children.Add(ring);
         cardContent.Children.Add(tip);
-        cardContent.Children.Add(_remainingBar);
-        cardContent.Children.Add(resumeButton);
-
-        var card = new Border
-        {
-            Background = new SolidColorBrush(CardBackgroundColor),
-            BorderBrush = new SolidColorBrush(CardBorderColor),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(20),
-            Padding = new Thickness(44, 36, 44, 36),
-            MaxWidth = Math.Clamp(monitorBounds.Width * 0.6, 480, 960) / (dpiScale > 0 ? dpiScale : 1.0),
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-            Child = cardContent
-        };
+        cardContent.Children.Add(_resumeButton);
+        cardContent.Children.Add(hint);
 
         var root = new Grid
         {
@@ -303,16 +345,65 @@ internal sealed class EyeRestOverlayWindow
         if (background.IsImage && !string.IsNullOrWhiteSpace(background.ImagePath))
         {
             root.Children.Add(CreateBackgroundImage(background.ImagePath!, monitorBounds));
-            root.Children.Add(new Grid
-            {
-                Background = new SolidColorBrush(ImageDimColor),
-                IsHitTestVisible = false
-            });
         }
 
-        // The card (with its scrim) sits above the background layers; its
-        // input stays live so the resume button is clickable.
-        root.Children.Add(card);
+        // The dim layer applies in both modes (Focust dims over solid
+        // backgrounds too) so the card text stays readable; its strength is
+        // part of the theme (Minimal dims deeper since it carries no card).
+        root.Children.Add(new Grid
+        {
+            Background = new SolidColorBrush(theme.DimColor),
+            IsHitTestVisible = false
+        });
+
+        // Theme card surface: frosted acrylic, solid panel, or no card at all
+        // (Minimal floats the content straight on the dim layer). The entrance
+        // animation targets whichever element carries the content.
+        FrameworkElement entranceTarget = cardContent;
+        if (theme.HasCard)
+        {
+            Brush cardBackground = theme.CardAcrylic
+                ? new AcrylicBrush
+                {
+                    TintColor = theme.CardAcrylicTint,
+                    TintOpacity = theme.CardAcrylicTintOpacity,
+                    FallbackColor = theme.CardFallbackColor
+                }
+                : new SolidColorBrush(theme.CardSolidColor);
+            var card = new Border
+            {
+                Background = cardBackground,
+                BorderBrush = new SolidColorBrush(theme.CardBorderColor),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(24),
+                Padding = new Thickness(40),
+                MaxWidth = 768,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                Child = cardContent
+            };
+            entranceTarget = card;
+            root.Children.Add(card);
+        }
+        else
+        {
+            root.Children.Add(cardContent);
+        }
+
+        // Keyboard parity with Focust's keydown handler: Enter/Space ends the
+        // break. PreviewKeyDown tunnels from the root, so it fires before a
+        // focused button turns Enter into a second (deduplicated) click.
+        root.PreviewKeyDown += (_, e) =>
+        {
+            if (e.Key is Windows.System.VirtualKey.Enter
+                or Windows.System.VirtualKey.NumberPadEnter
+                or Windows.System.VirtualKey.Space)
+            {
+                e.Handled = true;
+                skipRequested();
+            }
+        };
+
         _window = new Window
         {
             Title = "DeskBox Eye Rest",
@@ -325,9 +416,11 @@ internal sealed class EyeRestOverlayWindow
         WindowShellState.TryHideFromSwitchers(_appWindow);
         WindowShellState.TryApplyBorderlessOverlappedPresenter(_appWindow);
 
+        // No WS_EX_NOACTIVATE here: the break is meant to take the session
+        // over, so clicks and the programmatic focus below must be able to
+        // activate the overlay (Focust calls setFocus on its primary window).
         int extendedStyle = Win32Helper.GetWindowLong(_hWnd, Win32Helper.GWL_EXSTYLE);
         extendedStyle |= Win32Helper.WS_EX_TOOLWINDOW |
-                         Win32Helper.WS_EX_NOACTIVATE |
                          Win32Helper.WS_EX_LAYERED |
                          Win32Helper.WS_EX_TOPMOST;
         _ = Win32Helper.SetWindowLongPtr(
@@ -355,7 +448,9 @@ internal sealed class EyeRestOverlayWindow
             // The actual topmost claim: SetWindowLong only flips the style bit
             // (the docs require SetWindowPos to reorder), so this one call is
             // what puts the overlay above every normal window, other topmost
-            // windows and the taskbar — and shows it without stealing focus.
+            // windows and the taskbar. SWP_NOACTIVATE keeps the placement
+            // itself from stealing focus; the primary overlay activates
+            // explicitly afterwards.
             bool shown = Win32Helper.SetWindowPos(
                 _hWnd,
                 Win32Helper.HWND_TOPMOST,
@@ -381,6 +476,8 @@ internal sealed class EyeRestOverlayWindow
                     Win32Helper.SWP_NOACTIVATE |
                     Win32Helper.SWP_FRAMECHANGED);
             }
+
+            StartEntranceAnimation(entranceTarget);
         }
         catch (Exception ex) when (
             ex is COMException or InvalidOperationException or ArgumentException)
@@ -395,9 +492,96 @@ internal sealed class EyeRestOverlayWindow
         {
             EyeRestOverlay.s_activeOverlays.Add(this);
         }
+
+        if (takesFocus)
+        {
+            ActivateAndFocus();
+        }
     }
 
-    /// <summary>Refreshes the countdown display (per-tick).</summary>
+    /// <summary>
+    /// Gives the overlay keyboard focus so Enter/Space resume works without a
+    /// click. Focus lands on the resume button, which also makes the button's
+    /// hover/pressed states and its own Enter/Space activation behave natively.
+    /// </summary>
+    internal void ActivateAndFocus()
+    {
+        if (_closed)
+        {
+            return;
+        }
+
+        try
+        {
+            _window.Activate();
+            _ = _resumeButton.Focus(FocusState.Programmatic);
+        }
+        catch (Exception ex) when (ex is COMException or InvalidOperationException)
+        {
+            // A focus race during show must not kill the break overlay.
+        }
+    }
+
+    /// <summary>
+    /// Fades the content in from <see cref="EntranceScale"/> so the break
+    /// surfaces instead of popping. Any animation-engine failure leaves the
+    /// overlay fully visible and unscaled rather than invisible.
+    /// </summary>
+    private static void StartEntranceAnimation(FrameworkElement target)
+    {
+        try
+        {
+            target.Opacity = 0;
+            target.RenderTransformOrigin = new Point(0.5, 0.5);
+            target.RenderTransform = new ScaleTransform
+            {
+                ScaleX = EntranceScale,
+                ScaleY = EntranceScale
+            };
+
+            var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+            var fade = new DoubleAnimation
+            {
+                From = 0,
+                To = 1,
+                Duration = EntranceDuration,
+                EasingFunction = ease
+            };
+            Storyboard.SetTarget(fade, target);
+            Storyboard.SetTargetProperty(fade, "Opacity");
+            var growX = new DoubleAnimation
+            {
+                From = EntranceScale,
+                To = 1,
+                Duration = EntranceDuration,
+                EasingFunction = ease
+            };
+            Storyboard.SetTarget(growX, target);
+            Storyboard.SetTargetProperty(growX, "(UIElement.RenderTransform).(ScaleTransform.ScaleX)");
+            var growY = new DoubleAnimation
+            {
+                From = EntranceScale,
+                To = 1,
+                Duration = EntranceDuration,
+                EasingFunction = ease
+            };
+            Storyboard.SetTarget(growY, target);
+            Storyboard.SetTargetProperty(growY, "(UIElement.RenderTransform).(ScaleTransform.ScaleY)");
+
+            var storyboard = new Storyboard();
+            storyboard.Children.Add(fade);
+            storyboard.Children.Add(growX);
+            storyboard.Children.Add(growY);
+            storyboard.Begin();
+        }
+        catch (Exception ex) when (ex is COMException or InvalidOperationException)
+        {
+            target.Opacity = 1;
+            target.RenderTransform = null;
+        }
+    }
+
+    /// <summary>Refreshes the countdown display and ring arc (per-tick).</summary>
     internal void UpdateRemaining(TimeSpan remaining)
     {
         if (_closed)
@@ -408,15 +592,60 @@ internal sealed class EyeRestOverlayWindow
         try
         {
             _countdownText.Text = FormatRemaining(remaining);
-            _remainingBar.Value = _duration.TotalSeconds > 0
-                ? Math.Clamp(remaining.TotalSeconds / _duration.TotalSeconds, 0, 1)
-                : 0;
+            double elapsed = _duration.TotalSeconds > 0
+                ? Math.Clamp(1 - remaining.TotalSeconds / _duration.TotalSeconds, 0, 1)
+                : 1;
+            UpdateRing(elapsed);
         }
         catch (Exception ex) when (ex is COMException or InvalidOperationException)
         {
             // The XAML island can die with its monitor mid-break; a stale
             // countdown beats crashing the session.
         }
+    }
+
+    /// <summary>
+    /// Rebuilds the elapsed arc of the progress ring: a clockwise sweep from
+    /// 12 o'clock covering <paramref name="elapsedFraction"/> of the circle.
+    /// Near-zero renders nothing (track only) and near-full swaps to a whole
+    /// ellipse, since a single arc segment cannot express 360°.
+    /// </summary>
+    private void UpdateRing(double elapsedFraction)
+    {
+        if (elapsedFraction <= 0.0005)
+        {
+            _ringArc.Data = null;
+            return;
+        }
+
+        if (elapsedFraction >= 0.9995)
+        {
+            _ringArc.Data = new EllipseGeometry
+            {
+                Center = new Point(RingCenter, RingCenter),
+                RadiusX = RingRadius,
+                RadiusY = RingRadius
+            };
+            return;
+        }
+
+        double angle = -Math.PI / 2 + elapsedFraction * 2 * Math.PI;
+        var figure = new PathFigure
+        {
+            StartPoint = new Point(RingCenter, RingCenter - RingRadius)
+        };
+        figure.Segments.Add(new ArcSegment
+        {
+            Point = new Point(
+                RingCenter + RingRadius * Math.Cos(angle),
+                RingCenter + RingRadius * Math.Sin(angle)),
+            Size = new Size(RingRadius, RingRadius),
+            IsLargeArc = elapsedFraction > 0.5,
+            SweepDirection = SweepDirection.Clockwise
+        });
+        var geometry = new PathGeometry();
+        geometry.Figures.Add(figure);
+        _ringArc.Data = geometry;
     }
 
     /// <summary>

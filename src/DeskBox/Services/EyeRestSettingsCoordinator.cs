@@ -148,6 +148,15 @@ public sealed class EyeRestSettingsCoordinator : IEyeRestSettings
             (eyeRest, value) => eyeRest.EyeRestBackgroundFolder = value,
             path ?? string.Empty);
 
+    public string ReadOverlayTheme() =>
+        EyeRestOverlayThemeFactory.NormalizeTheme(_settings.Settings.EyeRest.EyeRestOverlayTheme);
+
+    public void SetOverlayTheme(string theme) =>
+        SetStringPreference(
+            eyeRest => eyeRest.EyeRestOverlayTheme,
+            (eyeRest, value) => eyeRest.EyeRestOverlayTheme = value,
+            EyeRestOverlayThemeFactory.NormalizeTheme(theme));
+
     public void ResetPreferences(bool scheduleSave = true)
     {
         ObjectDisposedException.ThrowIf(_stopped, this);
@@ -161,6 +170,7 @@ public sealed class EyeRestSettingsCoordinator : IEyeRestSettings
         eyeRest.EyeRestBackgroundColor = EyeRestBreakBackground.DefaultColorHex;
         eyeRest.EyeRestBackgroundImage = string.Empty;
         eyeRest.EyeRestBackgroundFolder = string.Empty;
+        eyeRest.EyeRestOverlayTheme = EyeRestOverlayThemeFactory.ThemeGlass;
         if (scheduleSave)
         {
             _updatingPreferences = true;

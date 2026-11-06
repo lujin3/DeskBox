@@ -54,7 +54,9 @@ public sealed class SettingsSliceOwnershipContractTests
         // +4 = eye-rest break background (mode/solid-color/image-path/
         // folder-path; additive — absent files deserialize to the solid
         // mode with the built-in dark color and empty paths).
-        Assert.Equal(252, FacadeProperties.Length);
+        // +1 = eye-rest overlay theme (additive — absent files deserialize
+        // to the Glass default).
+        Assert.Equal(253, FacadeProperties.Length);
 
         foreach (PropertyInfo facade in FacadeProperties)
         {

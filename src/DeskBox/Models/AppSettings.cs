@@ -856,4 +856,7 @@ public class AppSettings
 
     /// <inheritdoc cref="EyeRestSettingsSlice.EyeRestBackgroundFolder"/>
     public string EyeRestBackgroundFolder { get => EyeRest.EyeRestBackgroundFolder; set => EyeRest.EyeRestBackgroundFolder = value; }
+
+    /// <inheritdoc cref="EyeRestSettingsSlice.EyeRestOverlayTheme"/>
+    public string EyeRestOverlayTheme { get => EyeRest.EyeRestOverlayTheme; set => EyeRest.EyeRestOverlayTheme = value; }
 }

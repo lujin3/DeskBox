@@ -2824,6 +2824,7 @@ public partial class App : Application
                     @event.BreakKind,
                     @event.Remaining,
                     _eyeRestSettings!.ReadBreakBackground(),
+                    EyeRestOverlayThemeFactory.Resolve(_eyeRestSettings.ReadOverlayTheme()),
                     LocalizationService,
                     SkipEyeRestBreak);
                 break;

@@ -34,10 +34,23 @@ public sealed partial class EyeRestSettingsSection : UserControl
         public string WireValue { get; }
     }
 
+    /// <summary>Overlay theme combo entry; same AOT-safe pattern as the mode combo.</summary>
+    private sealed partial class OverlayThemeItem : ComboBoxItem
+    {
+        public OverlayThemeItem(string label, string wireValue)
+        {
+            Content = label;
+            WireValue = wireValue;
+        }
+
+        public string WireValue { get; }
+    }
+
     private IEyeRestSettings _settings = null!;
     private IntPtr _ownerWindow;
     private bool _isRefreshing;
     private string _backgroundModesLocalizationSignature = string.Empty;
+    private string _overlayThemesLocalizationSignature = string.Empty;
 
     private LocalizationService Localization => App.Current.LocalizationService;
 
@@ -88,6 +101,8 @@ public sealed partial class EyeRestSettingsSection : UserControl
             BackgroundColorPicker.Color = color;
             BackgroundImagePathText.Text = background.ImagePath;
             BackgroundFolderPathText.Text = background.FolderPath;
+            PopulateOverlayThemes();
+            SelectOverlayTheme(_settings.ReadOverlayTheme());
             SetCadenceEnabled(current.Enabled);
         }
         finally
@@ -152,6 +167,23 @@ public sealed partial class EyeRestSettingsSection : UserControl
         }
 
         UpdateBackgroundModeCards();
+    }
+
+    private void OverlayThemeComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isRefreshing || _settings is null)
+        {
+            return;
+        }
+
+        try
+        {
+            _settings.SetOverlayTheme(ReadSelectedOverlayTheme());
+        }
+        catch (Exception ex)
+        {
+            App.Log($"[EyeRest] Settings overlay-theme write failed: {ex}");
+        }
     }
 
     private void BackgroundColorPicker_ColorChanged(ColorPicker sender, ColorChangedEventArgs args)
@@ -256,6 +288,7 @@ public sealed partial class EyeRestSettingsSection : UserControl
         LongBreakBox.IsEnabled = enabled;
         LongEveryBox.IsEnabled = enabled;
         BackgroundModeCard.IsEnabled = enabled;
+        OverlayThemeCard.IsEnabled = enabled;
         UpdateBackgroundModeCards();
     }
 
@@ -310,6 +343,51 @@ public sealed partial class EyeRestSettingsSection : UserControl
         BackgroundModeComboBox.SelectedItem is BackgroundModeItem { WireValue: { } wire }
             ? wire
             : EyeRestBreakBackgroundFactory.ModeSolid;
+
+    private void PopulateOverlayThemes()
+    {
+        // Same options-signature pattern as the mode combo: rebuild localized
+        // labels when the effective culture changed, keep the selection.
+        string signature = Localization.CurrentCultureName;
+        if (OverlayThemeComboBox.Items.Count > 0 &&
+            string.Equals(_overlayThemesLocalizationSignature, signature, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        string selected = ReadSelectedOverlayTheme();
+        OverlayThemeComboBox.Items.Clear();
+        OverlayThemeComboBox.Items.Add(new OverlayThemeItem(
+            Localization.T("Settings.EyeRest.OverlayTheme.Glass"),
+            EyeRestOverlayThemeFactory.ThemeGlass));
+        OverlayThemeComboBox.Items.Add(new OverlayThemeItem(
+            Localization.T("Settings.EyeRest.OverlayTheme.Ink"),
+            EyeRestOverlayThemeFactory.ThemeInk));
+        OverlayThemeComboBox.Items.Add(new OverlayThemeItem(
+            Localization.T("Settings.EyeRest.OverlayTheme.Paper"),
+            EyeRestOverlayThemeFactory.ThemePaper));
+        OverlayThemeComboBox.Items.Add(new OverlayThemeItem(
+            Localization.T("Settings.EyeRest.OverlayTheme.Minimal"),
+            EyeRestOverlayThemeFactory.ThemeMinimal));
+        _overlayThemesLocalizationSignature = signature;
+        SelectOverlayTheme(selected);
+    }
+
+    private void SelectOverlayTheme(string wireValue)
+    {
+        OverlayThemeComboBox.SelectedItem = OverlayThemeComboBox.Items
+            .OfType<OverlayThemeItem>()
+            .FirstOrDefault(item => item.WireValue == wireValue);
+        if (OverlayThemeComboBox.SelectedItem is null && OverlayThemeComboBox.Items.Count > 0)
+        {
+            OverlayThemeComboBox.SelectedIndex = 0;
+        }
+    }
+
+    private string ReadSelectedOverlayTheme() =>
+        OverlayThemeComboBox.SelectedItem is OverlayThemeItem { WireValue: { } wire }
+            ? wire
+            : EyeRestOverlayThemeFactory.ThemeGlass;
 
     private static Color ParseColor(string hex)
     {

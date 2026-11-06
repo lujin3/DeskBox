@@ -215,5 +215,19 @@
                     TextTrimming="CharacterEllipsis" />
             </StackPanel>
         </toolkit:SettingsCard>
+
+        <toolkit:SettingsCard
+            x:Name="OverlayThemeCard"
+            HorizontalContentAlignment="Right"
+            svc:Localized.DescriptionKey="Settings.EyeRest.OverlayTheme.Description"
+            svc:Localized.HeaderKey="Settings.EyeRest.OverlayTheme.Title">
+            <toolkit:SettingsCard.HeaderIcon>
+                <FontIcon Glyph="&#xE771;" />
+            </toolkit:SettingsCard.HeaderIcon>
+            <ComboBox
+                x:Name="OverlayThemeComboBox"
+                MinWidth="{StaticResource SettingsControlMinWidth}"
+                SelectionChanged="OverlayThemeComboBox_SelectionChanged" />
+        </toolkit:SettingsCard>
     </StackPanel>
 </UserControl>

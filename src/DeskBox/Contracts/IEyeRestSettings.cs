@@ -73,6 +73,15 @@ public interface IEyeRestSettings
     /// <summary>Folder scanned for a random background image per break (Folder mode).</summary>
     void SetBackgroundFolder(string path);
 
+    /// <summary>
+    /// Reads the persisted overlay theme wire name, normalized (unknown values
+    /// fall back to Glass) so the settings combo never lands off-list.
+    /// </summary>
+    string ReadOverlayTheme();
+
+    /// <summary>Persists the overlay theme wire name (normalized on write).</summary>
+    void SetOverlayTheme(string theme);
+
     /// <summary>Restores every preference to its default.</summary>
     void ResetPreferences(bool scheduleSave = true);
 
