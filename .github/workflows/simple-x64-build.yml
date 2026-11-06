@@ -64,5 +64,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: DeskBox-win-x64-simple
-          path: src/DeskBox/bin/Release/**/publish/**
+          # Platform=x64 时 MSBuild 把平台段插进输出路径：bin\x64\Release\
+          # （AnyCPU 才是 bin\Release\），publish 目录在 RID 子目录下。
+          path: src/DeskBox/bin/x64/Release/**/publish/**
           if-no-files-found: error
