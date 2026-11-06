@@ -1,4 +1,5 @@
 using DeskBox.Contracts;
+using DeskBox.Features.EyeRest;
 using DeskBox.Helpers;
 using DeskBox.Platform;
 using DeskBox.Services;
