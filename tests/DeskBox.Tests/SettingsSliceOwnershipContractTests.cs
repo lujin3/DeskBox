@@ -28,7 +28,7 @@ public sealed class SettingsSliceOwnershipContractTests
     [Fact]
     public void EverySlice_IsExposedAsGetOnlyAndJsonIgnored()
     {
-        Assert.Equal(13, SliceProperties.Length);
+        Assert.Equal(14, SliceProperties.Length);
         Assert.All(SliceProperties, p =>
         {
             Assert.False(p.CanWrite, $"{p.Name} must be get-only");

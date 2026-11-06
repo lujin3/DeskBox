@@ -71,6 +71,9 @@ public class AppSettings
     [JsonIgnore]
     public SearchSettingsSlice Search { get; } = new();
 
+    [JsonIgnore]
+    public EyeRestSettingsSlice EyeRest { get; } = new();
+
     // ─── Serialization facade (wire contract, order-significant) ──
 
     /// <inheritdoc cref="CoreSettingsSlice.Theme"/>
@@ -824,4 +827,21 @@ public class AppSettings
 
     /// <inheritdoc cref="CloudBackupSettingsSlice.CloudBackupLastUnverifiedUtcTicks"/>
     public long CloudBackupLastUnverifiedUtcTicks { get => CloudBackup.CloudBackupLastUnverifiedUtcTicks; set => CloudBackup.CloudBackupLastUnverifiedUtcTicks = value; }
+
+    // ─── EyeRest (14th ownership slice) ─────────────────────────────
+
+    /// <inheritdoc cref="EyeRestSettingsSlice.EyeRestEnabled"/>
+    public bool EyeRestEnabled { get => EyeRest.EyeRestEnabled; set => EyeRest.EyeRestEnabled = value; }
+
+    /// <inheritdoc cref="EyeRestSettingsSlice.EyeRestWorkIntervalMinutes"/>
+    public int EyeRestWorkIntervalMinutes { get => EyeRest.EyeRestWorkIntervalMinutes; set => EyeRest.EyeRestWorkIntervalMinutes = value; }
+
+    /// <inheritdoc cref="EyeRestSettingsSlice.EyeRestMiniBreakSeconds"/>
+    public int EyeRestMiniBreakSeconds { get => EyeRest.EyeRestMiniBreakSeconds; set => EyeRest.EyeRestMiniBreakSeconds = value; }
+
+    /// <inheritdoc cref="EyeRestSettingsSlice.EyeRestLongBreakMinutes"/>
+    public int EyeRestLongBreakMinutes { get => EyeRest.EyeRestLongBreakMinutes; set => EyeRest.EyeRestLongBreakMinutes = value; }
+
+    /// <inheritdoc cref="EyeRestSettingsSlice.EyeRestLongBreakEveryMiniBreaks"/>
+    public int EyeRestLongBreakEveryMiniBreaks { get => EyeRest.EyeRestLongBreakEveryMiniBreaks; set => EyeRest.EyeRestLongBreakEveryMiniBreaks = value; }
 }
