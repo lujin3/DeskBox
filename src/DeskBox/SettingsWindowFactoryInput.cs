@@ -35,6 +35,7 @@ internal sealed record SettingsWindowFactoryInput(
     GroupNavigationSettingsCoordinator GroupNavigationSettings,
     ManagedStorageSettingsCoordinator ManagedStorageSettings,
     MaintenanceSettingsCoordinator MaintenanceSettings,
+    EyeRestSettingsCoordinator EyeRestSettings,
     PerformanceSettingsCoordinator PerformanceSettings,
     Contracts.ISettingsHotkeyActions HotkeyActions,
     ISettingsWidgetActions WidgetActions,
@@ -93,6 +94,7 @@ internal sealed record SettingsWindowFactoryInput(
             new DeskBox.Features.Music.MusicSettingsViewModel(FeatureWidgetsSettings, T),
             new DeskBox.Features.ManagedStorage.ManagedStorageSettingsViewModel(ManagedStorageSettings, T),
             new DeskBox.Features.Maintenance.MaintenanceSettingsViewModel(MaintenanceSettings),
+            EyeRestSettings,
             new DeskBox.Features.Performance.PerformanceSettingsViewModel(
                 PerformanceSettings,
                 InteractionSettings,

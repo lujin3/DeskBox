@@ -64,7 +64,7 @@ public sealed partial class SettingsWindow
         // CapsuleMode family
         "CapsuleOverridesSettings",
         // General family
-        "PerformanceSettings", "Displays"
+        "PerformanceSettings", "Displays", "EyeRestSettings"
     ];
 
     private void InitializeSettingsSectionElements()
@@ -622,6 +622,10 @@ public sealed partial class SettingsWindow
         if (sectionTag == "Displays")
         {
             DisplaysSection.Refresh();
+        }
+        if (sectionTag == "EyeRestSettings")
+        {
+            EyeRestSettingsSection.Refresh();
         }
         if (sectionTag == "WidgetGroups")
         {

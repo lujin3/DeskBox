@@ -3004,5 +3004,17 @@
   "EyeRest.Tip.Long.1": "Levántate y camina unos minutos",
   "EyeRest.Tip.Long.2": "Bebe un poco de agua",
   "EyeRest.Tip.Long.3": "Estira brazos y espalda",
-  "EyeRest.Tip.Long.4": "Mira por la ventana y descansa la vista en la distancia"
+  "EyeRest.Tip.Long.4": "Mira por la ventana y descansa la vista en la distancia",
+  "Settings.EyeRest.Title": "Descansos para la vista",
+  "Settings.EyeRest.Description": "Descansos breves y largos programados con superposición de descanso a pantalla completa",
+  "Settings.EyeRest.Enable.Title": "Activar descansos para la vista",
+  "Settings.EyeRest.Enable.Description": "Un descanso breve cada 20 minutos; uno largo después de cada 4 breves",
+  "Settings.EyeRest.WorkInterval.Title": "Intervalo de trabajo (minutos)",
+  "Settings.EyeRest.WorkInterval.Description": "Tiempo de trabajo antes de cada descanso breve (1–180)",
+  "Settings.EyeRest.MiniBreak.Title": "Duración del descanso breve (segundos)",
+  "Settings.EyeRest.MiniBreak.Description": "Duración de la superposición a pantalla completa del descanso breve (5–300)",
+  "Settings.EyeRest.LongBreak.Title": "Duración del descanso largo (minutos)",
+  "Settings.EyeRest.LongBreak.Description": "Duración de la superposición a pantalla completa del descanso largo (1–60)",
+  "Settings.EyeRest.LongEvery.Title": "Descansos breves por descanso largo",
+  "Settings.EyeRest.LongEvery.Description": "Descansos breves antes de cada descanso largo (1–12)"
 }

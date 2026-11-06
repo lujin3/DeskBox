@@ -3004,5 +3004,17 @@
   "EyeRest.Tip.Long.1": "일어나서 몇 분 걷세요",
   "EyeRest.Tip.Long.2": "물을 마셔 보세요",
   "EyeRest.Tip.Long.3": "팔과 등을 스트레칭하세요",
-  "EyeRest.Tip.Long.4": "창밖을 보며 눈을 멀리 두고 쉬게 하세요"
+  "EyeRest.Tip.Long.4": "창밖을 보며 눈을 멀리 두고 쉬게 하세요",
+  "Settings.EyeRest.Title": "눈 건강 휴식",
+  "Settings.EyeRest.Description": "정기적인 짧은 휴식과 긴 휴식, 시간이 되면 전체 화면 오버레이",
+  "Settings.EyeRest.Enable.Title": "눈 건강 휴식 사용",
+  "Settings.EyeRest.Enable.Description": "20분마다 짧은 휴식, 짧은 휴식 4회마다 긴 휴식",
+  "Settings.EyeRest.WorkInterval.Title": "작업 간격 (분)",
+  "Settings.EyeRest.WorkInterval.Description": "짧은 휴식 전까지의 작업 시간 (1–180)",
+  "Settings.EyeRest.MiniBreak.Title": "짧은 휴식 길이 (초)",
+  "Settings.EyeRest.MiniBreak.Description": "짧은 휴식의 전체 화면 오버레이 시간 (5–300)",
+  "Settings.EyeRest.LongBreak.Title": "긴 휴식 길이 (분)",
+  "Settings.EyeRest.LongBreak.Description": "긴 휴식의 전체 화면 오버레이 시간 (1–60)",
+  "Settings.EyeRest.LongEvery.Title": "긴 휴식까지의 짧은 휴식 수",
+  "Settings.EyeRest.LongEvery.Description": "각 긴 휴식 전의 짧은 휴식 횟수 (1–12)"
 }

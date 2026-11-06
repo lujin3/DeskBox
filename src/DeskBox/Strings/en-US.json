@@ -3004,5 +3004,17 @@
   "EyeRest.Tip.Long.1": "Get up and walk around for a few minutes",
   "EyeRest.Tip.Long.2": "Drink some water",
   "EyeRest.Tip.Long.3": "Stretch your arms and back",
-  "EyeRest.Tip.Long.4": "Look out the window and let your eyes rest on the distance"
+  "EyeRest.Tip.Long.4": "Look out the window and let your eyes rest on the distance",
+  "Settings.EyeRest.Title": "Eye-rest breaks",
+  "Settings.EyeRest.Description": "Scheduled mini and long breaks with a full-screen rest overlay",
+  "Settings.EyeRest.Enable.Title": "Enable eye-rest breaks",
+  "Settings.EyeRest.Enable.Description": "A mini break every 20 minutes; a long break after every 4 mini breaks",
+  "Settings.EyeRest.WorkInterval.Title": "Work interval (minutes)",
+  "Settings.EyeRest.WorkInterval.Description": "Work time before each mini break (1–180)",
+  "Settings.EyeRest.MiniBreak.Title": "Mini break length (seconds)",
+  "Settings.EyeRest.MiniBreak.Description": "Full-screen rest duration of a mini break (5–300)",
+  "Settings.EyeRest.LongBreak.Title": "Long break length (minutes)",
+  "Settings.EyeRest.LongBreak.Description": "Full-screen rest duration of a long break (1–60)",
+  "Settings.EyeRest.LongEvery.Title": "Mini breaks per long break",
+  "Settings.EyeRest.LongEvery.Description": "Mini breaks before each long break (1–12)"
 }

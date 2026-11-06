@@ -3004,5 +3004,17 @@
   "EyeRest.Tip.Long.1": "উঠে কিছুক্ষণ হাঁটুন",
   "EyeRest.Tip.Long.2": "একটু পানি পান করুন",
   "EyeRest.Tip.Long.3": "বাহু ও পিঠ স্ট্রেচ করুন",
-  "EyeRest.Tip.Long.4": "জানালা থেকে বাইরে তাকিয়ে চোখকে দূরে বিশ্রাম দিন"
+  "EyeRest.Tip.Long.4": "জানালা থেকে বাইরে তাকিয়ে চোখকে দূরে বিশ্রাম দিন",
+  "Settings.EyeRest.Title": "চোখের যত্নে বিরতি",
+  "Settings.EyeRest.Description": "নির্ধারিত ছোট ও দীর্ঘ বিরতি, সময় হলে ফুল-স্ক্রিন ওভারলে",
+  "Settings.EyeRest.Enable.Title": "চোখের যত্নে বিরতি চালু করুন",
+  "Settings.EyeRest.Enable.Description": "প্রতি ২০ মিনিটে ছোট বিরতি; প্রতি ৪টি ছোট বিরতির পরে দীর্ঘ বিরতি",
+  "Settings.EyeRest.WorkInterval.Title": "কাজের ব্যবধান (মিনিট)",
+  "Settings.EyeRest.WorkInterval.Description": "প্রতিটি ছোট বিরতির আগে কাজের সময় (১–১৮০)",
+  "Settings.EyeRest.MiniBreak.Title": "ছোট বিরতির সময়কাল (সেকেন্ড)",
+  "Settings.EyeRest.MiniBreak.Description": "ছোট বিরতির ফুল-স্ক্রিন ওভারলে সময় (৫–৩০০)",
+  "Settings.EyeRest.LongBreak.Title": "দীর্ঘ বিরতির সময়কাল (মিনিট)",
+  "Settings.EyeRest.LongBreak.Description": "দীর্ঘ বিরতির ফুল-স্ক্রিন ওভারলে সময় (১–৬০)",
+  "Settings.EyeRest.LongEvery.Title": "প্রতি দীর্ঘ বিরতিতে ছোট বিরতি",
+  "Settings.EyeRest.LongEvery.Description": "প্রতিটি দীর্ঘ বিরতির আগে ছোট বিরতির সংখ্যা (১–১২)"
 }

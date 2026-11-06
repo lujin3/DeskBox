@@ -103,6 +103,7 @@ public sealed partial class SettingsWindow : Window
             ["FeatureWidgets"] = new("FeatureWidgets", "Settings.Section.FeatureWidgets", null, "FeatureWidgets"),
             ["Interaction"] = new("Interaction", "Settings.Section.Interaction", null, "Interaction"),
             ["Displays"] = new("Displays", "Settings.Displays.Title", "General", "General"),
+            ["EyeRestSettings"] = new("EyeRestSettings", "Settings.EyeRest.Title", "General", "General"),
             ["Advanced"] = new("Advanced", "Settings.Section.Advanced", null, "Interaction"),
             ["Maintenance"] = new("Maintenance", "Settings.Section.Maintenance", null, "Maintenance"),
             ["About"] = new("About", "Settings.Nav.About", null, "About"),
@@ -145,6 +146,7 @@ public sealed partial class SettingsWindow : Window
     private readonly DeskBox.Features.Capsule.CapsuleSettingsViewModel _capsuleSettingsViewModel;
     private readonly DeskBox.Features.GroupNavigation.GroupNavigationSettingsViewModel _groupNavigationSettingsViewModel;
     private readonly DeskBox.Features.Performance.PerformanceSettingsViewModel _performanceSettingsViewModel;
+    private readonly DeskBox.Services.EyeRestSettingsCoordinator _eyeRestSettings;
     private readonly ISettingsHotkeyActions _hotkeyActions;
     private readonly ISettingsWidgetActions _widgetActions;
     private readonly ISettingsRestoreActions _restoreActions;
@@ -195,6 +197,7 @@ public sealed partial class SettingsWindow : Window
         DeskBox.Features.Music.MusicSettingsViewModel musicSettings,
         DeskBox.Features.ManagedStorage.ManagedStorageSettingsViewModel managedStorageSettings,
         DeskBox.Features.Maintenance.MaintenanceSettingsViewModel maintenanceSettings,
+        DeskBox.Services.EyeRestSettingsCoordinator eyeRestSettings,
         DeskBox.Features.Performance.PerformanceSettingsViewModel performanceSettings,
         ISettingsHotkeyActions hotkeyActions,
         ISettingsWidgetActions widgetActions,
@@ -233,6 +236,7 @@ public sealed partial class SettingsWindow : Window
         _capsuleSettingsViewModel = capsuleSettings;
         _groupNavigationSettingsViewModel = groupNavigationSettings;
         _performanceSettingsViewModel = performanceSettings;
+        _eyeRestSettings = eyeRestSettings;
         _hotkeyActions = hotkeyActions;
         _widgetActions = widgetActions;
         _restoreActions = restoreActions;

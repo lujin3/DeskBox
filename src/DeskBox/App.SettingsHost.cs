@@ -607,6 +607,10 @@ public partial class App
                 applyExternal: change => widgetActions.ApplyGroupNavigationDefaults(change)),
             new ManagedStorageSettingsCoordinator(settings),
             new MaintenanceSettingsCoordinator(settings),
+            // The host process owns no eye-rest runtime (the main process's
+            // coordinator reacts to the externally-propagated settings change);
+            // the coordinator here only needs to persist and clamp.
+            new EyeRestSettingsCoordinator(settings, settings => { }),
             new PerformanceSettingsCoordinator(settings),
             hotkey,
             widgetActions,

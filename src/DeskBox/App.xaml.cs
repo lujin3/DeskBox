@@ -4673,6 +4673,7 @@ public partial class App : Application
             _groupNavigationSettings ?? throw new InvalidOperationException("Group navigation settings are not initialized."),
             _managedStorageSettings ?? throw new InvalidOperationException("Managed storage settings are not initialized."),
             _maintenanceSettings ?? throw new InvalidOperationException("Maintenance settings are not initialized."),
+            _eyeRestSettings ?? throw new InvalidOperationException("Eye rest settings are not initialized."),
             _performanceSettings ?? throw new InvalidOperationException("Performance settings are not initialized."),
             CreateSettingsHotkeyActions(),
             new InProcessSettingsWidgetActions(

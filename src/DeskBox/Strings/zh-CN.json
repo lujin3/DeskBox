@@ -3004,5 +3004,17 @@
   "EyeRest.Tip.Long.1": "起身走动几分钟",
   "EyeRest.Tip.Long.2": "喝口水，补充水分",
   "EyeRest.Tip.Long.3": "伸展一下手臂和背部",
-  "EyeRest.Tip.Long.4": "看看窗外，让眼睛望向远处"
+  "EyeRest.Tip.Long.4": "看看窗外，让眼睛望向远处",
+  "Settings.EyeRest.Title": "护眼定时休息",
+  "Settings.EyeRest.Description": "定时小休与长休息，到点全屏遮罩提醒休息",
+  "Settings.EyeRest.Enable.Title": "启用护眼定时休息",
+  "Settings.EyeRest.Enable.Description": "每 20 分钟小休一次，每 4 次小休后长休息一次",
+  "Settings.EyeRest.WorkInterval.Title": "工作间隔（分钟）",
+  "Settings.EyeRest.WorkInterval.Description": "两次小休之间的工作时长（1–180）",
+  "Settings.EyeRest.MiniBreak.Title": "小休时长（秒）",
+  "Settings.EyeRest.MiniBreak.Description": "小休的全屏遮罩时长（5–300）",
+  "Settings.EyeRest.LongBreak.Title": "长休息时长（分钟）",
+  "Settings.EyeRest.LongBreak.Description": "长休息的全屏遮罩时长（1–60）",
+  "Settings.EyeRest.LongEvery.Title": "每几次小休后长休息",
+  "Settings.EyeRest.LongEvery.Description": "每两次长休息之间的小休次数（1–12）"
 }

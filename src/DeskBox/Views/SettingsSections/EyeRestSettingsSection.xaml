@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="DeskBox.Views.SettingsSections.EyeRestSettingsSection"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:svc="using:DeskBox.Services"
+    xmlns:toolkit="using:CommunityToolkit.WinUI.Controls">
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="ms-appx:///Styles/SettingsOverviewResources.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <!-- Pure code-behind on purpose (DisplaySettingsSection precedent): the
+         five controls map 1:1 onto IEyeRestSettings, whose setters already
+         persist, clamp, and reconcile the runtime. -->
+    <StackPanel Style="{StaticResource SectionPanelStyle}">
+        <toolkit:SettingsCard
+            HorizontalContentAlignment="Right"
+            svc:Localized.DescriptionKey="Settings.EyeRest.Enable.Description"
+            svc:Localized.HeaderKey="Settings.EyeRest.Enable.Title">
+            <toolkit:SettingsCard.HeaderIcon>
+                <FontIcon Glyph="&#xE7B3;" />
+            </toolkit:SettingsCard.HeaderIcon>
+            <ToggleSwitch
+                x:Name="EnableToggle"
+                MinWidth="0"
+                OnContent=""
+                OffContent=""
+                svc:Localized.AutomationNameKey="Settings.EyeRest.Enable.Title"
+                Toggled="EnableToggle_Toggled" />
+        </toolkit:SettingsCard>
+
+        <toolkit:SettingsCard
+            HorizontalContentAlignment="Right"
+            svc:Localized.DescriptionKey="Settings.EyeRest.WorkInterval.Description"
+            svc:Localized.HeaderKey="Settings.EyeRest.WorkInterval.Title">
+            <toolkit:SettingsCard.HeaderIcon>
+                <FontIcon Glyph="&#xE923;" />
+            </toolkit:SettingsCard.HeaderIcon>
+            <NumberBox
+                x:Name="WorkIntervalBox"
+                MinWidth="{StaticResource SettingsControlMinWidth}"
+                AutomationProperties.IsRequiredForForm="False"
+                Minimum="1"
+                Maximum="180"
+                SmallChange="1"
+                LargeChange="5"
+                ValueChanged="WorkIntervalBox_ValueChanged" />
+        </toolkit:SettingsCard>
+
+        <toolkit:SettingsCard
+            HorizontalContentAlignment="Right"
+            svc:Localized.DescriptionKey="Settings.EyeRest.MiniBreak.Description"
+            svc:Localized.HeaderKey="Settings.EyeRest.MiniBreak.Title">
+            <toolkit:SettingsCard.HeaderIcon>
+                <FontIcon Glyph="&#xE7B3;" />
+            </toolkit:SettingsCard.HeaderIcon>
+            <NumberBox
+                x:Name="MiniBreakBox"
+                MinWidth="{StaticResource SettingsControlMinWidth}"
+                AutomationProperties.IsRequiredForForm="False"
+                Minimum="5"
+                Maximum="300"
+                SmallChange="5"
+                LargeChange="30"
+                ValueChanged="MiniBreakBox_ValueChanged" />
+        </toolkit:SettingsCard>
+
+        <toolkit:SettingsCard
+            HorizontalContentAlignment="Right"
+            svc:Localized.DescriptionKey="Settings.EyeRest.LongBreak.Description"
+            svc:Localized.HeaderKey="Settings.EyeRest.LongBreak.Title">
+            <toolkit:SettingsCard.HeaderIcon>
+                <FontIcon Glyph="&#xE769;" />
+            </toolkit:SettingsCard.HeaderIcon>
+            <NumberBox
+                x:Name="LongBreakBox"
+                MinWidth="{StaticResource SettingsControlMinWidth}"
+                AutomationProperties.IsRequiredForForm="False"
+                Minimum="1"
+                Maximum="60"
+                SmallChange="1"
+                LargeChange="5"
+                ValueChanged="LongBreakBox_ValueChanged" />
+        </toolkit:SettingsCard>
+
+        <toolkit:SettingsCard
+            HorizontalContentAlignment="Right"
+            svc:Localized.DescriptionKey="Settings.EyeRest.LongEvery.Description"
+            svc:Localized.HeaderKey="Settings.EyeRest.LongEvery.Title">
+            <toolkit:SettingsCard.HeaderIcon>
+                <FontIcon Glyph="&#xE8E5;" />
+            </toolkit:SettingsCard.HeaderIcon>
+            <NumberBox
+                x:Name="LongEveryBox"
+                MinWidth="{StaticResource SettingsControlMinWidth}"
+                AutomationProperties.IsRequiredForForm="False"
+                Minimum="1"
+                Maximum="12"
+                SmallChange="1"
+                LargeChange="1"
+                ValueChanged="LongEveryBox_ValueChanged" />
+        </toolkit:SettingsCard>
+    </StackPanel>
+</UserControl>

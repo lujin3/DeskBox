@@ -3004,5 +3004,17 @@
   "EyeRest.Tip.Long.1": "उठकर कुछ मिनट टहलें",
   "EyeRest.Tip.Long.2": "थोड़ा पानी पिएँ",
   "EyeRest.Tip.Long.3": "बाहें और पीठ को खींचकर लचीला करें",
-  "EyeRest.Tip.Long.4": "खिड़की से बाहर देखें और आँखों को दूर देखने दें"
+  "EyeRest.Tip.Long.4": "खिड़की से बाहर देखें और आँखों को दूर देखने दें",
+  "Settings.EyeRest.Title": "आँखों की देखभाल ब्रेक",
+  "Settings.EyeRest.Description": "नियोजित छोटे और लंबे ब्रेक, समय पूरा होने पर फुल-स्क्रीन ओवरले",
+  "Settings.EyeRest.Enable.Title": "आँखों की देखभाल ब्रेक सक्षम करें",
+  "Settings.EyeRest.Enable.Description": "हर 20 मिनट पर छोटा ब्रेक; हर 4 छोटे ब्रेक के बाद लंबा ब्रेक",
+  "Settings.EyeRest.WorkInterval.Title": "कार्य अंतराल (मिनट)",
+  "Settings.EyeRest.WorkInterval.Description": "हर छोटे ब्रेक से पहले कार्य समय (1–180)",
+  "Settings.EyeRest.MiniBreak.Title": "छोटे ब्रेक की अवधि (सेकंड)",
+  "Settings.EyeRest.MiniBreak.Description": "छोटे ब्रेक का फुल-स्क्रीन ओवरले समय (5–300)",
+  "Settings.EyeRest.LongBreak.Title": "लंबे ब्रेक की अवधि (मिनट)",
+  "Settings.EyeRest.LongBreak.Description": "लंबे ब्रेक का फुल-स्क्रीन ओवरले समय (1–60)",
+  "Settings.EyeRest.LongEvery.Title": "प्रति लंबे ब्रेक पर छोटे ब्रेक",
+  "Settings.EyeRest.LongEvery.Description": "हर लंबे ब्रेक से पहले छोटे ब्रेक की संख्या (1–12)"
 }

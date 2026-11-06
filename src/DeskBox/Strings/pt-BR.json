@@ -3004,5 +3004,17 @@
   "EyeRest.Tip.Long.1": "Levante-se e caminhe por alguns minutos",
   "EyeRest.Tip.Long.2": "Beba um pouco de água",
   "EyeRest.Tip.Long.3": "Alongue braços e costas",
-  "EyeRest.Tip.Long.4": "Olhe pela janela e deixe os olhos descansarem no distante"
+  "EyeRest.Tip.Long.4": "Olhe pela janela e deixe os olhos descansarem no distante",
+  "Settings.EyeRest.Title": "Pausas para os olhos",
+  "Settings.EyeRest.Description": "Pausas curtas e longas programadas com overlay de descanso em tela cheia",
+  "Settings.EyeRest.Enable.Title": "Ativar pausas para os olhos",
+  "Settings.EyeRest.Enable.Description": "Uma pausa curta a cada 20 minutos; uma pausa longa a cada 4 pausas curtas",
+  "Settings.EyeRest.WorkInterval.Title": "Intervalo de trabalho (minutos)",
+  "Settings.EyeRest.WorkInterval.Description": "Tempo de trabalho antes de cada pausa curta (1–180)",
+  "Settings.EyeRest.MiniBreak.Title": "Duração da pausa curta (segundos)",
+  "Settings.EyeRest.MiniBreak.Description": "Duração do overlay de descanso da pausa curta (5–300)",
+  "Settings.EyeRest.LongBreak.Title": "Duração da pausa longa (minutos)",
+  "Settings.EyeRest.LongBreak.Description": "Duração do overlay de descanso da pausa longa (1–60)",
+  "Settings.EyeRest.LongEvery.Title": "Pausas curtas por pausa longa",
+  "Settings.EyeRest.LongEvery.Description": "Pausas curtas antes de cada pausa longa (1–12)"
 }

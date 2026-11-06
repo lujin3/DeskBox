@@ -1160,6 +1160,9 @@ Text="DeskBox" />
                     <DataTemplate x:Key="DisplaysSectionTemplate" x:DataType="viewModels:SettingsViewModel">
                         <sections:DisplaySettingsSection x:Name="DisplaysSection" Visibility="Collapsed" />
                     </DataTemplate>
+                    <DataTemplate x:Key="EyeRestSettingsSectionTemplate" x:DataType="viewModels:SettingsViewModel">
+                        <sections:EyeRestSettingsSection x:Name="EyeRestSettingsSection" Visibility="Collapsed" />
+                    </DataTemplate>
                     <DataTemplate x:Key="FileDisplaySettingsSectionTemplate" x:DataType="viewModels:SettingsViewModel">
                         <StackPanel x:Name="FileDisplaySettingsSection" Visibility="Collapsed" Style="{StaticResource SectionPanelStyle}">
                     <StackPanel Margin="0,8,0,0" Spacing="4">
@@ -3600,6 +3603,17 @@ Text="DeskBox" />
                             svc:Localized.HeaderKey="Settings.Displays.Title">
                             <toolkit:SettingsCard.HeaderIcon>
                                 <FontIcon Glyph="&#xE7F4;" />
+                            </toolkit:SettingsCard.HeaderIcon>
+                        </toolkit:SettingsCard>
+
+                        <toolkit:SettingsCard
+                            Click="NestedSettingsButton_Click"
+                            IsClickEnabled="True"
+                            Tag="EyeRestSettings"
+                            svc:Localized.DescriptionKey="Settings.EyeRest.Description"
+                            svc:Localized.HeaderKey="Settings.EyeRest.Title">
+                            <toolkit:SettingsCard.HeaderIcon>
+                                <FontIcon Glyph="&#xE7B3;" />
                             </toolkit:SettingsCard.HeaderIcon>
                         </toolkit:SettingsCard>
 

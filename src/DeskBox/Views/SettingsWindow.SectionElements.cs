@@ -62,6 +62,8 @@ public sealed partial class SettingsWindow
         FindCreatedSectionElement<global::DeskBox.Views.SettingsSections.DesktopOrganizationSettingsSection>("DesktopOrganizationSettings", "DesktopOrganizationSettingsSection")!;
     private global::DeskBox.Views.SettingsSections.DisplaySettingsSection DisplaysSection =>
         FindCreatedSectionElement<global::DeskBox.Views.SettingsSections.DisplaySettingsSection>("Displays", "DisplaysSection")!;
+    private global::DeskBox.Views.SettingsSections.EyeRestSettingsSection EyeRestSettingsSection =>
+        FindCreatedSectionElement<global::DeskBox.Views.SettingsSections.EyeRestSettingsSection>("EyeRestSettings", "EyeRestSettingsSection")!;
     private global::Microsoft.UI.Xaml.Controls.StackPanel FileDisplaySettingsSection =>
         FindCreatedSectionElement<global::Microsoft.UI.Xaml.Controls.StackPanel>("FileDisplaySettings", "FileDisplaySettingsSection")!;
     private global::Microsoft.UI.Xaml.Controls.StackPanel FileStorageSettingsSection =>

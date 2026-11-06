@@ -3004,5 +3004,17 @@
   "EyeRest.Tip.Long.1": "Встаньте и пройдитесь несколько минут",
   "EyeRest.Tip.Long.2": "Выпейте немного воды",
   "EyeRest.Tip.Long.3": "Потянитесь — руки и спину",
-  "EyeRest.Tip.Long.4": "Посмотрите в окно, дайте глазам отдохнуть на дальнем плане"
+  "EyeRest.Tip.Long.4": "Посмотрите в окно, дайте глазам отдохнуть на дальнем плане",
+  "Settings.EyeRest.Title": "Перерывы для глаз",
+  "Settings.EyeRest.Description": "Запланированные короткие и долгие перерывы с полноэкранным затемнением",
+  "Settings.EyeRest.Enable.Title": "Включить перерывы для глаз",
+  "Settings.EyeRest.Enable.Description": "Короткий перерыв каждые 20 минут; долгий — после каждых 4 коротких",
+  "Settings.EyeRest.WorkInterval.Title": "Интервал работы (минуты)",
+  "Settings.EyeRest.WorkInterval.Description": "Время работы перед каждым коротким перерывом (1–180)",
+  "Settings.EyeRest.MiniBreak.Title": "Длительность короткого перерыва (секунды)",
+  "Settings.EyeRest.MiniBreak.Description": "Длительность полноэкранного затемнения короткого перерыва (5–300)",
+  "Settings.EyeRest.LongBreak.Title": "Длительность долгого перерыва (минуты)",
+  "Settings.EyeRest.LongBreak.Description": "Длительность полноэкранного затемнения долгого перерыва (1–60)",
+  "Settings.EyeRest.LongEvery.Title": "Коротких перерывов на долгий",
+  "Settings.EyeRest.LongEvery.Description": "Коротких перерывов перед каждым долгим (1–12)"
 }
