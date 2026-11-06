@@ -499,5 +499,12 @@ public sealed class SettingsSliceContractBaselineTests
         "cloudBackupLastSuccessUtcTicks",
         "cloudBackupLastFailureUtcTicks",
         "cloudBackupLastUnverifiedUtcTicks",
+        // EyeRest (14th ownership slice) — wire order mirrors the facade
+        // forwarding property declaration order at the end of AppSettings.
+        "eyeRestEnabled",
+        "eyeRestWorkIntervalMinutes",
+        "eyeRestMiniBreakSeconds",
+        "eyeRestLongBreakMinutes",
+        "eyeRestLongBreakEveryMiniBreaks",
     ];
 }

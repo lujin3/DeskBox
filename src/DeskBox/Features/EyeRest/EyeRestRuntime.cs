@@ -1,5 +1,4 @@
 using DeskBox.Contracts;
-using DeskBox.Services;
 
 namespace DeskBox.Features.EyeRest;
 
@@ -8,17 +7,19 @@ namespace DeskBox.Features.EyeRest;
 /// <see cref="Todo.TodoReminderRuntime"/> with the single-session
 /// simplification (no retiring-session list): the session is created lazily on
 /// first reconcile and <see cref="Reconcile(EyeRestRuntimeSettings, bool)"/>
-/// refreshes it in place. Lifecycle calls are made on the owning UI thread; the
-/// thread is the serialization boundary of the <see cref="IFeatureRuntime"/>
-/// state machine.
+/// refreshes it in place. The session is held as
+/// <see cref="IEyeRestTimerSession"/> (same contract shape as the Todo
+/// reminder) so this layer never references the service implementation.
+/// Lifecycle calls are made on the owning UI thread; the thread is the
+/// serialization boundary of the <see cref="IFeatureRuntime"/> state machine.
 /// </summary>
 internal sealed class EyeRestRuntime(
-    Func<EyeRestTimerService> createService,
+    Func<IEyeRestTimerSession> createService,
     Func<EyeRestRuntimeSettings> readSettings) : IFeatureRuntime
 {
     private bool _stopped;
 
-    internal EyeRestTimerService? Current { get; private set; }
+    internal IEyeRestTimerSession? Current { get; private set; }
 
     /// <summary>
     /// Reconciles to the given settings: disabled retires the session (or
@@ -55,7 +56,7 @@ internal sealed class EyeRestRuntime(
             return;
         }
 
-        EyeRestTimerService candidate = createService();
+        IEyeRestTimerSession candidate = createService();
         try
         {
             candidate.Start();

@@ -48,7 +48,10 @@ public sealed class SettingsSliceOwnershipContractTests
         // and lastRunVersion.
         // +2 = autoDownloadUpdates + showUpdateToastNotification (background
         // auto-download and update toasts).
-        Assert.Equal(243, FacadeProperties.Length);
+        // +5 = eye-rest break slice (enabled/work-interval/mini-break-length/
+        // long-break-length/mini-breaks-per-long-break; additive — absent
+        // files deserialize to the disabled default with 20/20/5/4 cadence).
+        Assert.Equal(248, FacadeProperties.Length);
 
         foreach (PropertyInfo facade in FacadeProperties)
         {

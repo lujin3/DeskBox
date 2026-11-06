@@ -17,7 +17,7 @@ namespace DeskBox.Services;
 /// with the current remainder, to drive the overlay countdown display.</item>
 /// </list>
 /// </summary>
-public sealed class EyeRestTimerService : IDisposable
+public sealed class EyeRestTimerService : IEyeRestTimerSession
 {
     private static readonly TimeSpan TickInterval = TimeSpan.FromSeconds(1);
 
@@ -120,6 +120,10 @@ public sealed class EyeRestTimerService : IDisposable
         // SkipBreak performs the transition; emit the ended event the tick
         // loop would have produced had the countdown run out.
         EventRaised?.Invoke(new EyeRestBreakEvent(EyeRestBreakEventKind.BreakEnded, endingKind, TimeSpan.Zero));
+        // The work phase restarts on the old schedule here (same as the tick
+        // loop's post-BreakEnded path): swap in a pending mid-break settings
+        // change now so a skip does not defer it a full cycle.
+        ApplyPendingSchedule(force: false);
     }
 
     /// <summary>Starts the next break immediately (tray "break now"). No-op during a break or when disabled.</summary>
