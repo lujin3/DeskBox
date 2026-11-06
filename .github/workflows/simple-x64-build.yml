@@ -1,0 +1,54 @@
+name: Simple x64 Build
+
+# 最简打包验证流程：只做 x64 自包含 publish，产出可直接运行的 DeskBox.exe。
+# 刻意不碰：Native AOT、Rust 原生、Inno 安装器、锁模式 restore、ARM64、签名。
+# 这是开发期验证产物，不是零售渠道——零售仍走 distribution-audit 门禁。
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: simple-x64-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: x64 self-contained publish
+    runs-on: windows-2025-vs2026
+    timeout-minutes: 45
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: 1
+      DOTNET_NOLOGO: 1
+
+    steps:
+      - name: Checkout isolated source snapshot
+        uses: actions/checkout@v4
+
+      - name: Setup pinned .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.402
+
+      - name: Publish DeskBox (x64, self-contained, no AOT)
+        shell: pwsh
+        run: |
+          dotnet publish .\src\DeskBox\DeskBox.csproj `
+            -c Release `
+            -p:Platform=x64 `
+            -p:RuntimeIdentifier=win-x64 `
+            -p:SelfContained=true `
+            -p:WindowsAppSDKSelfContained=true `
+            --verbosity minimal
+          if ($LASTEXITCODE -ne 0) {
+            throw "dotnet publish failed with exit code $LASTEXITCODE."
+          }
+
+      - name: Upload publish output
+        uses: actions/upload-artifact@v4
+        with:
+          name: DeskBox-win-x64-simple
+          path: src/DeskBox/bin/Release/**/publish/**
+          if-no-files-found: error
