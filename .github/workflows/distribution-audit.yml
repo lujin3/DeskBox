@@ -106,13 +106,15 @@ jobs:
           }
           Write-Host "Inno Setup compiler: $iscc ($innoVersion)"
           $innoParsed = $null
-          if ([version]::TryParse($innoVersion, [ref]$innoParsed)) {
+          $hasKnownVersion = $innoVersion -notin @('', '0.0.0.0') -and
+            [version]::TryParse($innoVersion, [ref]$innoParsed)
+          if ($hasKnownVersion) {
             if ($innoParsed -lt [version]'6.4.0') {
               throw "Inno Setup $innoVersion is below the required 6.4.0 (installer language arbitration floor for the /LANG update flow)."
             }
           }
           else {
-            Write-Warning "Inno Setup version '$innoVersion' could not be parsed; skipped the 6.4.0 floor check."
+            Write-Warning "Could not determine the Inno Setup version; continuing without the 6.4.0 version check."
           }
 
           $kitsBin = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10\bin'
