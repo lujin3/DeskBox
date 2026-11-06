@@ -2848,7 +2848,17 @@ public partial class App : Application
         catch (Exception ex)
         {
             Log($"[EyeRest] Skip failed: {ex}");
-            EyeRestOverlay.CloseAll();
+        }
+        finally
+        {
+            // Defense in depth: a successful skip closes the overlay via the
+            // BreakEnded event (synchronous); a session that was just retired
+            // (disable raced the skip) leaves the overlay stranded — never
+            // keep the screens covered with no live session behind them.
+            if (EyeRestOverlay.AnyActive)
+            {
+                EyeRestOverlay.CloseAll();
+            }
         }
     }
 
