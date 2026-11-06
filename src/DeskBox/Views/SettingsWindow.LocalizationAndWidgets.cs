@@ -396,4 +396,52 @@ public sealed partial class SettingsWindow
             DispatcherQueue.TryEnqueue(RefreshFeatureWidgetList);
         }
     }
+
+    /// <summary>
+    /// The eye-rest entry card's toggle in the FeatureWidgets section: writes
+    /// straight through the eye-rest coordinator (same write path as the
+    /// section page's own enable toggle and the tray menu). Refreshed at
+    /// section creation and on every FeatureWidgets page entry so external
+    /// flips (tray, section page) converge on the next visit.
+    /// </summary>
+    private void EyeRestFeatureToggle_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (_isRefreshingEyeRestFeatureToggle || _eyeRestSettings is null)
+        {
+            return;
+        }
+
+        bool enabled = ((ToggleSwitch)sender).IsOn;
+        _ = RunEyeRestFeatureToggleWriteAsync(enabled);
+    }
+
+    private async Task RunEyeRestFeatureToggleWriteAsync(bool enabled)
+    {
+        try
+        {
+            await _eyeRestSettings.SetEnabledAsync(enabled);
+        }
+        catch (Exception ex)
+        {
+            App.Log($"[EyeRest] FeatureWidgets enable write failed: {ex}");
+        }
+    }
+
+    private void RefreshEyeRestFeatureToggle()
+    {
+        if (EyeRestFeatureToggle is not { } toggle || _eyeRestSettings is null)
+        {
+            return;
+        }
+
+        _isRefreshingEyeRestFeatureToggle = true;
+        try
+        {
+            toggle.IsOn = _eyeRestSettings.Read().Enabled;
+        }
+        finally
+        {
+            _isRefreshingEyeRestFeatureToggle = false;
+        }
+    }
 }

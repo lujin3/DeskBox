@@ -52,6 +52,7 @@ public sealed partial class SettingsWindow
         // FeatureWidgets family
         "QuickCaptureSettings", "TodoSettings", "MusicSettings",
         "WeatherSettings", "GlanceSettings", "SearchSettings",
+        "EyeRestSettings",
         // Appearance family
         "AppearanceMaterialSettings", "AppearanceDensitySettings",
         "AppearanceWindowSettings", "AppearanceAnimationSettings",
@@ -64,7 +65,7 @@ public sealed partial class SettingsWindow
         // CapsuleMode family
         "CapsuleOverridesSettings",
         // General family
-        "PerformanceSettings", "Displays", "EyeRestSettings"
+        "PerformanceSettings", "Displays"
     ];
 
     private void InitializeSettingsSectionElements()
@@ -634,6 +635,9 @@ public sealed partial class SettingsWindow
         if (sectionTag == "FeatureWidgets")
         {
             RefreshFeatureWidgetList();
+            // The entry card's toggle is static XAML (outside the code-built
+            // feature-widget rows), so it refreshes separately.
+            RefreshEyeRestFeatureToggle();
         }
         if (sectionTag == "QuickCaptureSettings")
         {

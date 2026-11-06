@@ -1834,6 +1834,28 @@ Text="DeskBox" />
                         <StackPanel
                             x:Name="FeatureWidgetList"
                             Spacing="4" />
+                        <!-- Eye-rest entry card, same shape as the code-built
+                             feature-widget rows above (toggle + click-through to
+                             the section page); static XAML because eye-rest is a
+                             background feature, not a WidgetKind. -->
+                        <toolkit:SettingsCard
+                            Click="NestedSettingsButton_Click"
+                            IsClickEnabled="True"
+                            HorizontalContentAlignment="Right"
+                            Tag="EyeRestSettings"
+                            svc:Localized.DescriptionKey="Settings.EyeRest.Description"
+                            svc:Localized.HeaderKey="Settings.EyeRest.Title">
+                            <toolkit:SettingsCard.HeaderIcon>
+                                <FontIcon Glyph="&#xE7B3;" />
+                            </toolkit:SettingsCard.HeaderIcon>
+                            <ToggleSwitch
+                                x:Name="EyeRestFeatureToggle"
+                                MinWidth="0"
+                                OnContent=""
+                                OffContent=""
+                                svc:Localized.AutomationNameKey="Settings.EyeRest.Title"
+                                Toggled="EyeRestFeatureToggle_Toggled" />
+                        </toolkit:SettingsCard>
                     </StackPanel>
                 </StackPanel>
                     </DataTemplate>
@@ -3603,17 +3625,6 @@ Text="DeskBox" />
                             svc:Localized.HeaderKey="Settings.Displays.Title">
                             <toolkit:SettingsCard.HeaderIcon>
                                 <FontIcon Glyph="&#xE7F4;" />
-                            </toolkit:SettingsCard.HeaderIcon>
-                        </toolkit:SettingsCard>
-
-                        <toolkit:SettingsCard
-                            Click="NestedSettingsButton_Click"
-                            IsClickEnabled="True"
-                            Tag="EyeRestSettings"
-                            svc:Localized.DescriptionKey="Settings.EyeRest.Description"
-                            svc:Localized.HeaderKey="Settings.EyeRest.Title">
-                            <toolkit:SettingsCard.HeaderIcon>
-                                <FontIcon Glyph="&#xE7B3;" />
                             </toolkit:SettingsCard.HeaderIcon>
                         </toolkit:SettingsCard>
 

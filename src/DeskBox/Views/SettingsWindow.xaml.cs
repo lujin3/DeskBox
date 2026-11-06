@@ -83,6 +83,7 @@ public sealed partial class SettingsWindow : Window
     private bool _isAppearanceSliderDragging;
     private bool _isRefreshingHotkeyControls;
     private bool _isRefreshingFeatureWidgetList;
+    private bool _isRefreshingEyeRestFeatureToggle;
     private bool _isSyncingNavigationSelection;
     private bool _isSelectingCity;
     private bool _isRefreshingBackupSnapshots;
@@ -103,7 +104,7 @@ public sealed partial class SettingsWindow : Window
             ["FeatureWidgets"] = new("FeatureWidgets", "Settings.Section.FeatureWidgets", null, "FeatureWidgets"),
             ["Interaction"] = new("Interaction", "Settings.Section.Interaction", null, "Interaction"),
             ["Displays"] = new("Displays", "Settings.Displays.Title", "General", "General"),
-            ["EyeRestSettings"] = new("EyeRestSettings", "Settings.EyeRest.Title", "General", "General"),
+            ["EyeRestSettings"] = new("EyeRestSettings", "Settings.EyeRest.Title", "FeatureWidgets", "FeatureWidgets"),
             ["Advanced"] = new("Advanced", "Settings.Section.Advanced", null, "Interaction"),
             ["Maintenance"] = new("Maintenance", "Settings.Section.Maintenance", null, "Maintenance"),
             ["About"] = new("About", "Settings.Nav.About", null, "About"),

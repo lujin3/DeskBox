@@ -15,7 +15,6 @@ internal static class SettingsSearchCatalog
         new("General", "Settings.SilentStartup.Title", "Settings.SilentStartup.Description"),
         new("General", "Settings.Performance.Title", "Settings.Performance.Description"),
         new("General", "Settings.Displays.Title", "Settings.Displays.Description"),
-        new("General", "Settings.EyeRest.Title", "Settings.EyeRest.Description"),
         new("General", "Settings.AttachmentStorageMode.Title", "Settings.AttachmentStorageMode.Description"),
         new("General", "Settings.Onboarding.Title", "Settings.Onboarding.Description"),
         new("Appearance", "Settings.Theme.Title", "Settings.Theme.Description"),
@@ -99,8 +98,9 @@ internal static class SettingsSearchCatalog
         new("Displays", "Settings.Displays.NewWidgets.Header", "Settings.Displays.NewWidgets.Description"),
         new("Displays", "Settings.Displays.MultipleDisplays.Header", null),
         new("Displays", "Settings.Displays.Disconnect.Header", "Settings.Displays.Disconnect.Description"),
-        // EyeRestSettingsSection carries no in-section title card (the General
-        // nav card above covers the section title in search), so this block is
+        // EyeRestSettingsSection carries no in-section title card (the
+        // FeatureWidgets entry card above covers the section title in
+        // search), so this block is
         // exactly the nine cards of EyeRestSettingsSection.xaml in file order.
         new("EyeRestSettings", "Settings.EyeRest.Enable.Title", "Settings.EyeRest.Enable.Description"),
         new("EyeRestSettings", "Settings.EyeRest.WorkInterval.Title", "Settings.EyeRest.WorkInterval.Description"),
@@ -144,6 +144,10 @@ internal static class SettingsSearchCatalog
         new("InteractionWindowSettings", "Settings.WidgetSnap.Spacing.Title", "Settings.WidgetSnap.Spacing.Description"),
         new("InteractionWindowSettings", "Settings.DesktopDoubleClick.Title", "Settings.DesktopDoubleClick.Description"),
         new("ManagedStorage", "Settings.ManagedStorage.ListTitle", null),
+        // The FeatureWidgets section's only static card: the feature-widget
+        // list above is code-built (FeatureWidgetEntryFactory), so the eye-rest
+        // entry card is the section's sole XAML-derived entry.
+        new("FeatureWidgets", "Settings.EyeRest.Title", "Settings.EyeRest.Description"),
         new("QuickCaptureSettings", "Settings.QuickCapture.Title", null),
         new("QuickCaptureSettings", "Settings.QuickCapture.WideLayout.Title", null),
         new("QuickCaptureSettings", "Settings.QuickCapture.WideOpen.Title", "Settings.QuickCapture.WideOpen.Description"),

@@ -108,6 +108,14 @@ public sealed partial class SettingsWindow
                 break;
         }
 
+        // The FeatureWidgets section hosts the eye-rest entry card's toggle;
+        // creation-time refresh covers a state changed while the window sat
+        // closed (activation only fires on focus).
+        if (sectionTag == "FeatureWidgets")
+        {
+            RefreshEyeRestFeatureToggle();
+        }
+
         // Pilot pattern for retiring the shell binding facade: sections whose
         // editor owns the binding surface get the editor as their DataContext,
         // overriding the shell view model set above. {Binding} markup resolves

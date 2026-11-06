@@ -122,6 +122,11 @@ public sealed partial class SettingsWindow
         FindCreatedSectionElement<global::Microsoft.UI.Xaml.Controls.StackPanel>("FeatureWidgets", "FeatureWidgetsSection")!;
     private global::Microsoft.UI.Xaml.Controls.StackPanel FeatureWidgetList =>
         FindCreatedSectionElement<global::Microsoft.UI.Xaml.Controls.StackPanel>("FeatureWidgets", "FeatureWidgetList")!;
+    // The eye-rest entry card's toggle in the FeatureWidgets section: the
+    // XAML wires its Toggled handler, so the projected ToggleSwitch type is
+    // referenced by generated code (AOT trim-safe typed lookup).
+    private global::Microsoft.UI.Xaml.Controls.ToggleSwitch? EyeRestFeatureToggle =>
+        FindCreatedSectionElement<global::Microsoft.UI.Xaml.Controls.ToggleSwitch>("FeatureWidgets", "EyeRestFeatureToggle");
     private global::Microsoft.UI.Xaml.Controls.StackPanel QuickCaptureSettingsSection =>
         FindCreatedSectionElement<global::Microsoft.UI.Xaml.Controls.StackPanel>("QuickCaptureSettings", "QuickCaptureSettingsSection")!;
     private global::Microsoft.UI.Xaml.Controls.ToggleSwitch QuickCaptureClipboardToggle =>
