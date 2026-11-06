@@ -3016,5 +3016,8 @@
   "Settings.EyeRest.LongBreak.Title": "長休憩の長さ（分）",
   "Settings.EyeRest.LongBreak.Description": "長休憩の全画面オーバーレイ時間（1～60）",
   "Settings.EyeRest.LongEvery.Title": "長休憩までの小休憩回数",
-  "Settings.EyeRest.LongEvery.Description": "長休憩ごとの小休憩回数（1～12）"
+  "Settings.EyeRest.LongEvery.Description": "長休憩ごとの小休憩回数（1～12）",
+  "Tray.EyeRest.ToggleOn": "目の休憩：オン",
+  "Tray.EyeRest.ToggleOff": "目の休憩：オフ",
+  "Tray.EyeRest.BreakNow": "今すぐ休憩"
 }

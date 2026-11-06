@@ -3016,5 +3016,8 @@
   "Settings.EyeRest.LongBreak.Title": "Long break length (minutes)",
   "Settings.EyeRest.LongBreak.Description": "Full-screen rest duration of a long break (1–60)",
   "Settings.EyeRest.LongEvery.Title": "Mini breaks per long break",
-  "Settings.EyeRest.LongEvery.Description": "Mini breaks before each long break (1–12)"
+  "Settings.EyeRest.LongEvery.Description": "Mini breaks before each long break (1–12)",
+  "Tray.EyeRest.ToggleOn": "Eye-rest breaks: on",
+  "Tray.EyeRest.ToggleOff": "Eye-rest breaks: off",
+  "Tray.EyeRest.BreakNow": "Take a break now"
 }

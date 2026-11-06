@@ -3016,5 +3016,8 @@
   "Settings.EyeRest.LongBreak.Title": "Duración del descanso largo (minutos)",
   "Settings.EyeRest.LongBreak.Description": "Duración de la superposición a pantalla completa del descanso largo (1–60)",
   "Settings.EyeRest.LongEvery.Title": "Descansos breves por descanso largo",
-  "Settings.EyeRest.LongEvery.Description": "Descansos breves antes de cada descanso largo (1–12)"
+  "Settings.EyeRest.LongEvery.Description": "Descansos breves antes de cada descanso largo (1–12)",
+  "Tray.EyeRest.ToggleOn": "Descansos para la vista: activados",
+  "Tray.EyeRest.ToggleOff": "Descansos para la vista: desactivados",
+  "Tray.EyeRest.BreakNow": "Descansar ahora"
 }

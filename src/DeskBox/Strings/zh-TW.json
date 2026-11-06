@@ -3016,5 +3016,8 @@
   "Settings.EyeRest.LongBreak.Title": "長休息時長（分鐘）",
   "Settings.EyeRest.LongBreak.Description": "長休息的全螢幕遮罩時長（1–60）",
   "Settings.EyeRest.LongEvery.Title": "每幾次小休後長休息",
-  "Settings.EyeRest.LongEvery.Description": "每兩次長休息之間的小休次數（1–12）"
+  "Settings.EyeRest.LongEvery.Description": "每兩次長休息之間的小休次數（1–12）",
+  "Tray.EyeRest.ToggleOn": "護眼休息：開",
+  "Tray.EyeRest.ToggleOff": "護眼休息：關",
+  "Tray.EyeRest.BreakNow": "立即休息"
 }

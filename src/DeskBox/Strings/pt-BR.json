@@ -3016,5 +3016,8 @@
   "Settings.EyeRest.LongBreak.Title": "Duração da pausa longa (minutos)",
   "Settings.EyeRest.LongBreak.Description": "Duração do overlay de descanso da pausa longa (1–60)",
   "Settings.EyeRest.LongEvery.Title": "Pausas curtas por pausa longa",
-  "Settings.EyeRest.LongEvery.Description": "Pausas curtas antes de cada pausa longa (1–12)"
+  "Settings.EyeRest.LongEvery.Description": "Pausas curtas antes de cada pausa longa (1–12)",
+  "Tray.EyeRest.ToggleOn": "Pausas para os olhos: ativadas",
+  "Tray.EyeRest.ToggleOff": "Pausas para os olhos: desativadas",
+  "Tray.EyeRest.BreakNow": "Fazer uma pausa agora"
 }

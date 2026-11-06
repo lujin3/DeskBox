@@ -3016,5 +3016,8 @@
   "Settings.EyeRest.LongBreak.Title": "Длительность долгого перерыва (минуты)",
   "Settings.EyeRest.LongBreak.Description": "Длительность полноэкранного затемнения долгого перерыва (1–60)",
   "Settings.EyeRest.LongEvery.Title": "Коротких перерывов на долгий",
-  "Settings.EyeRest.LongEvery.Description": "Коротких перерывов перед каждым долгим (1–12)"
+  "Settings.EyeRest.LongEvery.Description": "Коротких перерывов перед каждым долгим (1–12)",
+  "Tray.EyeRest.ToggleOn": "Перерывы для глаз: включены",
+  "Tray.EyeRest.ToggleOff": "Перерывы для глаз: выключены",
+  "Tray.EyeRest.BreakNow": "Сделать перерыв сейчас"
 }

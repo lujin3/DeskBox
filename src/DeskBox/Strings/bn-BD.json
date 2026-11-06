@@ -3016,5 +3016,8 @@
   "Settings.EyeRest.LongBreak.Title": "দীর্ঘ বিরতির সময়কাল (মিনিট)",
   "Settings.EyeRest.LongBreak.Description": "দীর্ঘ বিরতির ফুল-স্ক্রিন ওভারলে সময় (১–৬০)",
   "Settings.EyeRest.LongEvery.Title": "প্রতি দীর্ঘ বিরতিতে ছোট বিরতি",
-  "Settings.EyeRest.LongEvery.Description": "প্রতিটি দীর্ঘ বিরতির আগে ছোট বিরতির সংখ্যা (১–১২)"
+  "Settings.EyeRest.LongEvery.Description": "প্রতিটি দীর্ঘ বিরতির আগে ছোট বিরতির সংখ্যা (১–১২)",
+  "Tray.EyeRest.ToggleOn": "চোখের যত্নে বিরতি: চালু",
+  "Tray.EyeRest.ToggleOff": "চোখের যত্নে বিরতি: বন্ধ",
+  "Tray.EyeRest.BreakNow": "এখনই বিরতি নিন"
 }

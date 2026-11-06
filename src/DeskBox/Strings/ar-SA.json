@@ -3016,5 +3016,8 @@
   "Settings.EyeRest.LongBreak.Title": "مدة الاستراحة الطويلة (دقائق)",
   "Settings.EyeRest.LongBreak.Description": "مدة غطاء الاستراحة الطويلة بملء الشاشة (1–60)",
   "Settings.EyeRest.LongEvery.Title": "الاستراحات القصيرة لكل استراحة طويلة",
-  "Settings.EyeRest.LongEvery.Description": "عدد الاستراحات القصيرة قبل كل استراحة طويلة (1–12)"
+  "Settings.EyeRest.LongEvery.Description": "عدد الاستراحات القصيرة قبل كل استراحة طويلة (1–12)",
+  "Tray.EyeRest.ToggleOn": "استراحات العناية بالعيون: مفعّلة",
+  "Tray.EyeRest.ToggleOff": "استراحات العناية بالعيون: معطّلة",
+  "Tray.EyeRest.BreakNow": "خُذ استراحة الآن"
 }

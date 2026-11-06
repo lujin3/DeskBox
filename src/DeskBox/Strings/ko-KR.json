@@ -3016,5 +3016,8 @@
   "Settings.EyeRest.LongBreak.Title": "긴 휴식 길이 (분)",
   "Settings.EyeRest.LongBreak.Description": "긴 휴식의 전체 화면 오버레이 시간 (1–60)",
   "Settings.EyeRest.LongEvery.Title": "긴 휴식까지의 짧은 휴식 수",
-  "Settings.EyeRest.LongEvery.Description": "각 긴 휴식 전의 짧은 휴식 횟수 (1–12)"
+  "Settings.EyeRest.LongEvery.Description": "각 긴 휴식 전의 짧은 휴식 횟수 (1–12)",
+  "Tray.EyeRest.ToggleOn": "눈 건강 휴식: 켬",
+  "Tray.EyeRest.ToggleOff": "눈 건강 휴식: 끔",
+  "Tray.EyeRest.BreakNow": "지금 휴식하기"
 }

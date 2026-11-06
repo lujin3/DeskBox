@@ -72,6 +72,26 @@ public partial class App
                 contextMenu,
                 OpenFeatureWidgetsFromTray));
 
+        var eyeRestToggleItem = new MenuFlyoutItem
+        {
+            Text = localization.T(GetEyeRestTrayToggleKey()),
+            Width = TrayMenuItemWidth,
+            Icon = new FontIcon { Glyph = "" }
+        };
+        AttachTrayMenuItemInteraction(
+            eyeRestToggleItem,
+            () => RunTrayMenuActionAsync(contextMenu, ToggleEyeRestFromTrayAsync));
+
+        var eyeRestBreakNowItem = new MenuFlyoutItem
+        {
+            Text = localization.T("Tray.EyeRest.BreakNow"),
+            Width = TrayMenuItemWidth,
+            Icon = new FontIcon { Glyph = "" }
+        };
+        AttachTrayMenuItemInteraction(
+            eyeRestBreakNowItem,
+            () => RunTrayMenuActionAsync(contextMenu, BreakNowFromTray));
+
         var settingsItem = new MenuFlyoutItem
         {
             Text = localization.T("Tray.Settings"),
@@ -125,6 +145,8 @@ public partial class App
 
         contextMenu.Items.Add(mapFolderItem);
         contextMenu.Items.Add(addFeatureWidgetItem);
+        contextMenu.Items.Add(eyeRestToggleItem);
+        contextMenu.Items.Add(eyeRestBreakNowItem);
         contextMenu.Items.Add(new MenuFlyoutSeparator());
         contextMenu.Items.Add(openManagedStorageItem);
         contextMenu.Items.Add(new MenuFlyoutSeparator());
@@ -136,6 +158,8 @@ public partial class App
         _trayOrganizeDesktopItem = organizeDesktopItem;
         _trayMapFolderItem = mapFolderItem;
         _trayAddFeatureWidgetItem = addFeatureWidgetItem;
+        _eyeRestTrayToggleItem = eyeRestToggleItem;
+        _eyeRestTrayBreakNowItem = eyeRestBreakNowItem;
         _trayOpenManagedStorageItem = openManagedStorageItem;
         _trayUpdateItem = updateItem;
         _traySettingsItem = settingsItem;
@@ -503,6 +527,17 @@ public partial class App
         if (_trayOrganizeDesktopItem is not null)
         {
             _trayOrganizeDesktopItem.IsEnabled = canCreateWidget;
+        }
+
+        // The eye-rest pair reflects the live enablement on every menu open:
+        // the toggle label shows what the click will do, and "break now" only
+        // makes sense while the scheduler runs (and never during a break).
+        if (_eyeRestTrayToggleItem is not null && _eyeRestTrayBreakNowItem is not null)
+        {
+            bool eyeRestEnabled = _eyeRestSettings?.Read().Enabled ?? false;
+            _eyeRestTrayToggleItem.Text = LocalizationService.T(GetEyeRestTrayToggleKey());
+            _eyeRestTrayBreakNowItem.IsEnabled =
+                eyeRestEnabled && !EyeRestOverlay.AnyActive;
         }
 
         foreach (var item in _trayCreateWidgetItems.Values)
@@ -1131,6 +1166,16 @@ public partial class App
         {
             _trayExitItem.Text = LocalizationService.T("Tray.Exit");
         }
+
+        if (_eyeRestTrayToggleItem is not null)
+        {
+            _eyeRestTrayToggleItem.Text = LocalizationService.T(GetEyeRestTrayToggleKey());
+        }
+
+        if (_eyeRestTrayBreakNowItem is not null)
+        {
+            _eyeRestTrayBreakNowItem.Text = LocalizationService.T("Tray.EyeRest.BreakNow");
+        }
     }
 
     private void RefreshTrayToolTipText()
@@ -1163,6 +1208,57 @@ public partial class App
         contextMenu.Hide();
         await Task.Yield();
         action();
+    }
+
+    private static string GetEyeRestTrayToggleKey()
+    {
+        // The label shows the CURRENT state ("护眼休息：开"/"护眼休息：关");
+        // clicking flips it. Enablement lives in the settings slice, so the
+        // label stays truthful across restarts and the settings page.
+        bool enabled = App.Current._eyeRestSettings?.Read().Enabled ?? false;
+        return enabled ? "Tray.EyeRest.ToggleOn" : "Tray.EyeRest.ToggleOff";
+    }
+
+    /// <summary>
+    /// Tray eye-rest master toggle: the persisted enablement flip; the
+    /// coordinator reconciles the live timer session (start/stop) directly.
+    /// </summary>
+    private async Task ToggleEyeRestFromTrayAsync()
+    {
+        if (_eyeRestSettings is null)
+        {
+            return;
+        }
+
+        try
+        {
+            bool currentlyEnabled = _eyeRestSettings.Read().Enabled;
+            await _eyeRestSettings.SetEnabledAsync(!currentlyEnabled);
+            Log($"[EyeRest] Tray toggle → {(!currentlyEnabled ? "on" : "off")}");
+        }
+        catch (Exception ex)
+        {
+            Log($"[EyeRest] Tray toggle failed: {ex}");
+        }
+    }
+
+    /// <summary>Tray "break now": forces the next scheduled break immediately.</summary>
+    private void BreakNowFromTray()
+    {
+        if (EyeRestOverlay.AnyActive)
+        {
+            return;
+        }
+
+        try
+        {
+            _eyeRestRuntime?.Current?.ForceBreakNow();
+            Log("[EyeRest] Tray break-now triggered");
+        }
+        catch (Exception ex)
+        {
+            Log($"[EyeRest] Tray break-now failed: {ex}");
+        }
     }
 
     private static async Task RunTrayMenuActionAsync(MenuFlyout contextMenu, Func<Task> action)

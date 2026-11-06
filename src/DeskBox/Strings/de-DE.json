@@ -3016,5 +3016,8 @@
   "Settings.EyeRest.LongBreak.Title": "Dauer der langen Pause (Minuten)",
   "Settings.EyeRest.LongBreak.Description": "Dauer des Vollbild-Overlays der langen Pause (1–60)",
   "Settings.EyeRest.LongEvery.Title": "Kurze Pausen pro langer Pause",
-  "Settings.EyeRest.LongEvery.Description": "Kurze Pausen vor jeder langen Pause (1–12)"
+  "Settings.EyeRest.LongEvery.Description": "Kurze Pausen vor jeder langen Pause (1–12)",
+  "Tray.EyeRest.ToggleOn": "Augenschonende Pausen: an",
+  "Tray.EyeRest.ToggleOff": "Augenschonende Pausen: aus",
+  "Tray.EyeRest.BreakNow": "Jetzt eine Pause machen"
 }

@@ -3016,5 +3016,8 @@
   "Settings.EyeRest.LongBreak.Title": "लंबे ब्रेक की अवधि (मिनट)",
   "Settings.EyeRest.LongBreak.Description": "लंबे ब्रेक का फुल-स्क्रीन ओवरले समय (1–60)",
   "Settings.EyeRest.LongEvery.Title": "प्रति लंबे ब्रेक पर छोटे ब्रेक",
-  "Settings.EyeRest.LongEvery.Description": "हर लंबे ब्रेक से पहले छोटे ब्रेक की संख्या (1–12)"
+  "Settings.EyeRest.LongEvery.Description": "हर लंबे ब्रेक से पहले छोटे ब्रेक की संख्या (1–12)",
+  "Tray.EyeRest.ToggleOn": "आँखों की देखभाल ब्रेक: चालू",
+  "Tray.EyeRest.ToggleOff": "आँखों की देखभाल ब्रेक: बंद",
+  "Tray.EyeRest.BreakNow": "अभी ब्रेक लें"
 }

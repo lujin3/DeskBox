@@ -3016,5 +3016,8 @@
   "Settings.EyeRest.LongBreak.Title": "Durée de la pause longue (minutes)",
   "Settings.EyeRest.LongBreak.Description": "Durée du voile plein écran de la pause longue (1–60)",
   "Settings.EyeRest.LongEvery.Title": "Pauses courtes par pause longue",
-  "Settings.EyeRest.LongEvery.Description": "Pauses courtes avant chaque pause longue (1–12)"
+  "Settings.EyeRest.LongEvery.Description": "Pauses courtes avant chaque pause longue (1–12)",
+  "Tray.EyeRest.ToggleOn": "Pauses pour les yeux : activées",
+  "Tray.EyeRest.ToggleOff": "Pauses pour les yeux : désactivées",
+  "Tray.EyeRest.BreakNow": "Faire une pause maintenant"
 }
