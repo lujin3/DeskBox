@@ -13,15 +13,6 @@ on:
         required: false
         default: 'DeskBox'
         type: string
-      platform-filter:
-        description: 'Platforms to build: all, x64, or arm64'
-        required: false
-        default: 'all'
-        type: choice
-        options:
-          - all
-          - x64
-          - arm64
 
 permissions:
   contents: read
@@ -33,12 +24,6 @@ concurrency:
 jobs:
   distribution:
     name: ${{ matrix.platform }} Direct Full and Store AOT distribution
-    # platform-filter prunes matrix children per dispatch (all / x64 / arm64);
-    # pruned children surface as skipped, not absent, so the run summary still
-    # shows both platforms.
-    if: >-
-      ${{ (inputs.platform-filter != 'x64' || matrix.platform == 'x64') &&
-          (inputs.platform-filter != 'arm64' || matrix.platform == 'ARM64') }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 120
     strategy:
@@ -121,15 +106,13 @@ jobs:
           }
           Write-Host "Inno Setup compiler: $iscc ($innoVersion)"
           $innoParsed = $null
-          $hasKnownVersion = $innoVersion -notin @('', '0.0.0.0') -and
-            [version]::TryParse($innoVersion, [ref]$innoParsed)
-          if ($hasKnownVersion) {
+          if ([version]::TryParse($innoVersion, [ref]$innoParsed)) {
             if ($innoParsed -lt [version]'6.4.0') {
               throw "Inno Setup $innoVersion is below the required 6.4.0 (installer language arbitration floor for the /LANG update flow)."
             }
           }
           else {
-            Write-Warning "Could not determine the Inno Setup version; continuing without the 6.4.0 version check."
+            Write-Warning "Inno Setup version '$innoVersion' could not be parsed; skipped the 6.4.0 floor check."
           }
 
           $kitsBin = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10\bin'
