@@ -517,12 +517,56 @@ internal sealed class EyeRestOverlayWindow
 
         try
         {
+            ForceForegroundForBreak();
             _window.Activate();
             _ = _resumeButton.Focus(FocusState.Programmatic);
         }
         catch (Exception ex) when (ex is COMException or InvalidOperationException)
         {
             // A focus race during show must not kill the break overlay.
+        }
+    }
+
+    /// <summary>
+    /// Windows denies SetForegroundWindow to a background process, and the
+    /// break fires while the user is typing in some other app — so the plain
+    /// <see cref="Window.Activate"/> was silently refused: the overlay covered
+    /// the screen, but keyboard focus (and therefore the Enter/Space resume
+    /// shortcut) stayed with the original foreground app. Attaching our UI
+    /// thread's input queue to the foreground thread for the duration of the
+    /// activation lifts that lock (the classic AttachThreadInput workaround),
+    /// after which the activation and the XAML focus set on the resume button
+    /// are honored. A failed attach (e.g. an elevated foreground app) leaves
+    /// today's behavior: the overlay shows, only the button click resumes.
+    /// </summary>
+    private void ForceForegroundForBreak()
+    {
+        IntPtr foreground = Win32Helper.GetForegroundWindow();
+        if (foreground == IntPtr.Zero || foreground == _hWnd)
+        {
+            return;
+        }
+
+        uint currentThread = Win32Helper.GetCurrentThreadId();
+        uint foregroundThread = Win32Helper.GetWindowThreadProcessId(foreground, out _);
+        if (foregroundThread == 0 || foregroundThread == currentThread)
+        {
+            return;
+        }
+
+        if (!Win32Helper.AttachThreadInput(currentThread, foregroundThread, fAttach: true))
+        {
+            return;
+        }
+
+        try
+        {
+            _ = Win32Helper.SetForegroundWindow(_hWnd);
+            _ = Win32Helper.SetFocus(_hWnd);
+        }
+        finally
+        {
+            _ = Win32Helper.AttachThreadInput(currentThread, foregroundThread, fAttach: false);
         }
     }
 
