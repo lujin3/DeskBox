@@ -2991,5 +2991,7 @@
   "Widget.UnlockSize": "サイズのロック解除",
   "Widget.Shell.Collapse": "ウィジェットを折りたたむ",
   "Todo.Due.Custom.Time": "カスタム時刻",
-  "Todo.Detail.EditStep": "ステップを編集"
+  "Todo.Detail.EditStep": "ステップを編集",
+  "EyeRest.Notification.LongBreakTitle": "長い休憩の予告",
+  "EyeRest.Notification.LongBreakBody": "まもなく 30 秒後に長い休憩が始まります。立ち上がってストレッチしましょう"
 }

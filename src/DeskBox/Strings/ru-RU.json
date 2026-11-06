@@ -2991,5 +2991,7 @@
   "Widget.UnlockSize": "Разблокировать размер",
   "Widget.Shell.Collapse": "Свернуть виджет",
   "Todo.Due.Custom.Time": "Настраиваемое время",
-  "Todo.Detail.EditStep": "Изменить шаг"
+  "Todo.Detail.EditStep": "Изменить шаг",
+  "EyeRest.Notification.LongBreakTitle": "Скоро долгий перерыв",
+  "EyeRest.Notification.LongBreakBody": "Долгий перерыв начнётся через 30 секунд — встаньте и разомнитесь"
 }

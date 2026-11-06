@@ -1,0 +1,91 @@
+using DeskBox.Contracts;
+using DeskBox.Services;
+
+namespace DeskBox.Features.EyeRest;
+
+/// <summary>
+/// Owns the active eye-rest timer session, modeled on
+/// <see cref="Todo.TodoReminderRuntime"/> with the single-session
+/// simplification (no retiring-session list): the session is created lazily on
+/// first reconcile and <see cref="Reconcile(EyeRestRuntimeSettings, bool)"/>
+/// refreshes it in place. Lifecycle calls are made on the owning UI thread; the
+/// thread is the serialization boundary of the <see cref="IFeatureRuntime"/>
+/// state machine.
+/// </summary>
+internal sealed class EyeRestRuntime(
+    Func<EyeRestTimerService> createService,
+    Func<EyeRestRuntimeSettings> readSettings) : IFeatureRuntime
+{
+    private bool _stopped;
+
+    internal EyeRestTimerService? Current { get; private set; }
+
+    /// <summary>
+    /// Reconciles to the given settings: disabled retires the session (or
+    /// leaves it retired), enabled creates one if none exists and refreshes it
+    /// otherwise. Rollback: a candidate that fails to start is disposed before
+    /// the exception propagates — no half lease survives.
+    /// </summary>
+    internal void Reconcile(EyeRestRuntimeSettings settings, bool forceActive = false)
+    {
+        if (_stopped)
+        {
+            return;
+        }
+
+        if (!settings.ShouldRun && !forceActive)
+        {
+            Retire();
+            return;
+        }
+
+        if (Current is { } current)
+        {
+            current.Refresh(settings);
+            return;
+        }
+
+        EyeRestTimerService candidate = createService();
+        try
+        {
+            candidate.Start();
+            Current = candidate;
+        }
+        catch
+        {
+            candidate.Dispose();
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// <see cref="IFeatureRuntime"/> lease entry: reconciles to the settings
+    /// that are current right now — the same path the settings coordinator
+    /// drives. Idempotency comes from <see cref="Reconcile"/> (an existing
+    /// session is only refreshed).
+    /// </summary>
+    public Task StartAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        Reconcile(readSettings());
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// <see cref="IFeatureRuntime"/> release: stops accepting reconciliation
+    /// and retires the session. Terminal — a start after this is a no-op.
+    /// Repeat calls are no-ops, not double releases.
+    /// </summary>
+    public ValueTask DisposeAsync()
+    {
+        _stopped = true;
+        Retire();
+        return ValueTask.CompletedTask;
+    }
+
+    private void Retire()
+    {
+        Current?.Dispose();
+        Current = null;
+    }
+}

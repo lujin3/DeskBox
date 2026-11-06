@@ -2991,5 +2991,7 @@
   "Widget.UnlockSize": "إلغاء قفل الحجم",
   "Widget.Shell.Collapse": "طي القطعة",
   "Todo.Due.Custom.Time": "وقت مخصص",
-  "Todo.Detail.EditStep": "تحرير الخطوة"
+  "Todo.Detail.EditStep": "تحرير الخطوة",
+  "EyeRest.Notification.LongBreakTitle": "استراحة طويلة قريبًا",
+  "EyeRest.Notification.LongBreakBody": "تبدأ الاستراحة الطويلة بعد 30 ثانية — قم وتحرك قليلًا"
 }

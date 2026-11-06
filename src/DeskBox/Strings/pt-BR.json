@@ -2991,5 +2991,7 @@
   "Widget.UnlockSize": "Desbloquear tamanho",
   "Widget.Shell.Collapse": "Recolher Widget",
   "Todo.Due.Custom.Time": "Hora personalizada",
-  "Todo.Detail.EditStep": "Editar etapa"
+  "Todo.Detail.EditStep": "Editar etapa",
+  "EyeRest.Notification.LongBreakTitle": "Pausa longa se aproximando",
+  "EyeRest.Notification.LongBreakBody": "Uma pausa longa começa em 30 segundos — hora de se levantar e se movimentar"
 }

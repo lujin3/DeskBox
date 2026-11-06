@@ -2991,5 +2991,7 @@
   "Widget.UnlockSize": "Größe entsperren",
   "Widget.Shell.Collapse": "Widget zusammenklappen",
   "Todo.Due.Custom.Time": "Benutzerdefinierte Uhrzeit",
-  "Todo.Detail.EditStep": "Schritt bearbeiten"
+  "Todo.Detail.EditStep": "Schritt bearbeiten",
+  "EyeRest.Notification.LongBreakTitle": "Lange Pause steht bevor",
+  "EyeRest.Notification.LongBreakBody": "In 30 Sekunden beginnt eine lange Pause – Zeit aufzustehen und sich zu bewegen"
 }

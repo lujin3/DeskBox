@@ -2991,5 +2991,7 @@
   "Widget.UnlockSize": "আকার আনলক করুন",
   "Widget.Shell.Collapse": "উইজেট সঙ্কুচিত করুন",
   "Todo.Due.Custom.Time": "কাস্টম সময়",
-  "Todo.Detail.EditStep": "ধাপ সম্পাদনা করুন"
+  "Todo.Detail.EditStep": "ধাপ সম্পাদনা করুন",
+  "EyeRest.Notification.LongBreakTitle": "দীর্ঘ বিরতি আসন্ন",
+  "EyeRest.Notification.LongBreakBody": "৩০ সেকেন্ড পরে দীর্ঘ বিরতি শুরু হবে — উঠে একটু নড়াচড়া করুন"
 }

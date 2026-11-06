@@ -2991,5 +2991,7 @@
   "Widget.UnlockSize": "Desbloquear tamaño",
   "Widget.Shell.Collapse": "Contraer widget",
   "Todo.Due.Custom.Time": "Hora personalizada",
-  "Todo.Detail.EditStep": "Editar paso"
+  "Todo.Detail.EditStep": "Editar paso",
+  "EyeRest.Notification.LongBreakTitle": "Descanso largo pronto",
+  "EyeRest.Notification.LongBreakBody": "Un descanso largo comienza en 30 segundos: hora de levantarse y moverse un poco"
 }

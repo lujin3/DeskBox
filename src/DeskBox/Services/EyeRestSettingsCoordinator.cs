@@ -22,6 +22,8 @@ public sealed class EyeRestSettingsCoordinator : IEyeRestSettings
     private bool _updatingPreferences;
     private bool _stopped;
 
+    internal bool IsStopped => _stopped;
+
     public EyeRestSettingsCoordinator(
         SettingsService settings,
         Action<EyeRestRuntimeSettings> refreshRuntime)

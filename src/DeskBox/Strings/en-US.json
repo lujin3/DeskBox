@@ -2991,5 +2991,7 @@
   "Widget.UnlockSize": "Unlock size",
   "Widget.Shell.Collapse": "Collapse widget",
   "Todo.Due.Custom.Time": "Custom time",
-  "Todo.Detail.EditStep": "Edit step"
+  "Todo.Detail.EditStep": "Edit step",
+  "EyeRest.Notification.LongBreakTitle": "Long break coming up",
+  "EyeRest.Notification.LongBreakBody": "A long break starts in 30 seconds — time to stand up and move around."
 }

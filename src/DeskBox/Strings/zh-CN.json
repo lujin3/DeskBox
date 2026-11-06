@@ -2991,5 +2991,7 @@
   "Widget.UnlockSize": "解锁尺寸",
   "Widget.Shell.Collapse": "收起格子",
   "Todo.Due.Custom.Time": "自定义时间",
-  "Todo.Detail.EditStep": "编辑步骤"
+  "Todo.Detail.EditStep": "编辑步骤",
+  "EyeRest.Notification.LongBreakTitle": "长休息即将开始",
+  "EyeRest.Notification.LongBreakBody": "长休息将在 30 秒后开始，起身活动一下吧"
 }
