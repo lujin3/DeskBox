@@ -3057,5 +3057,12 @@
   "Settings.EyeRest.BackgroundFolder.Choose": "ফোল্ডার নির্বাচন করুন",
   "Tray.EyeRest.ToggleOn": "চোখের যত্নে বিরতি: চালু",
   "Tray.EyeRest.ToggleOff": "চোখের যত্নে বিরতি: বন্ধ",
+  "WidgetContent.SystemProxy.StatusLabel": "বাস্তবায়িত",
+  "WidgetContent.SystemProxy.StatusDescription": "Windows-এর ম্যানুয়াল সিস্টেম প্রক্সি টগল করুন",
+  "SystemProxy.Title": "সিস্টেম প্রক্সি",
+  "SystemProxy.ServerLabel": "প্রক্সি সার্ভার",
+  "SystemProxy.NotConfigured": "কোনো প্রক্সি সার্ভার কনফিগার করা নেই। আগে Windows সেটিংসে সেট করুন।",
+  "Tray.SystemProxy.ToggleOn": "সিস্টেম প্রক্সি: চালু",
+  "Tray.SystemProxy.ToggleOff": "সিস্টেম প্রক্সি: বন্ধ",
   "Tray.EyeRest.BreakNow": "এখনই বিরতি নিন"
 }

@@ -619,7 +619,12 @@ public sealed partial class WidgetManager
                 WidgetKind.Glance,
                 CreateOrShowGlanceWidgetsAsync,
                 SetGlanceFeatureWidgetEnabledAsync,
-                () => CloseLoadedFeatureWidgetWindows(WidgetKind.Glance))
+                () => CloseLoadedFeatureWidgetWindows(WidgetKind.Glance)),
+            new(
+                WidgetKind.SystemProxy,
+                async _ => await CreateSingletonContentFeatureWidgetAsync(WidgetKind.SystemProxy),
+                (enabled, reveal) => SetContentFeatureWidgetEnabledAsync(WidgetKind.SystemProxy, enabled, reveal),
+                () => HideAndCloseFeatureWidgetAsync(WidgetKind.SystemProxy))
         ];
 
         return handlers.ToDictionary(handler => handler.WidgetKind);
@@ -679,6 +684,14 @@ public sealed partial class WidgetManager
                     request.CancellationToken)),
             new(
                 WidgetKind.Glance,
+                async request => await CreateContentWidgetFromConfigAsync(
+                    request.Config,
+                    request.KeepPreparedForAnimation,
+                    request.RevealAfterCreate,
+                    request.ShowRaisedWhileInitializing,
+                    request.CancellationToken)),
+            new(
+                WidgetKind.SystemProxy,
                 async request => await CreateContentWidgetFromConfigAsync(
                     request.Config,
                     request.KeepPreparedForAnimation,

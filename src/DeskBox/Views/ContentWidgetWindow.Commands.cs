@@ -466,11 +466,16 @@ public sealed partial class ContentWidgetWindow
             App.Current.WidgetManager,
             App.Current.LocalizationService);
 
-        flyout.Items.Add(WidgetSettingsMenuHelper.CreateMenuItem(
-            _config.WidgetKind,
-            App.Current.LocalizationService,
-            beforeClick: flyout.Hide,
-            widgetId: _config.Id));
+        // Kinds without a dedicated settings page (e.g. the proxy card, whose
+        // card IS the control surface) must not get an inert "configure" item.
+        if (WidgetSettingsMenuHelper.GetSettingsSectionTag(_config.WidgetKind) is not null)
+        {
+            flyout.Items.Add(WidgetSettingsMenuHelper.CreateMenuItem(
+                _config.WidgetKind,
+                App.Current.LocalizationService,
+                beforeClick: flyout.Hide,
+                widgetId: _config.Id));
+        }
 
         flyout.Items.Add(new MenuFlyoutSeparator());
         var disableWidget = new MenuFlyoutItem

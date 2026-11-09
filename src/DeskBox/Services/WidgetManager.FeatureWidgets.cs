@@ -433,6 +433,7 @@ public sealed partial class WidgetManager
                 WidgetKind.Weather => 200,
                 WidgetKind.Search => 280,
                 WidgetKind.Glance => 360,
+                WidgetKind.SystemProxy => 240,
                 _ => Math.Max(_settingsService.Settings.DefaultWidgetWidth, 320)
             },
             Height = kind switch
@@ -441,6 +442,7 @@ public sealed partial class WidgetManager
                 WidgetKind.Weather => 200,
                 WidgetKind.Search => 90,
                 WidgetKind.Glance => 260,
+                WidgetKind.SystemProxy => 120,
                 _ => Math.Max(_settingsService.Settings.DefaultWidgetHeight, 360)
             }
         };

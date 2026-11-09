@@ -5,9 +5,10 @@
   xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
   xmlns:uap5="http://schemas.microsoft.com/appx/manifest/uap/windows10/5"
   xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
+  xmlns:desktop6="http://schemas.microsoft.com/appx/manifest/desktop/windows10/6"
   xmlns:com="http://schemas.microsoft.com/appx/manifest/com/windows10"
   xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
-  IgnorableNamespaces="uap uap5 desktop com rescap">
+  IgnorableNamespaces="uap uap5 desktop desktop6 com rescap">
 
   <Identity
     Name="D1FC332A.DeskBoxWidgets"
@@ -20,6 +21,12 @@
     <DisplayName>ms-resource:AppDisplayName</DisplayName>
     <PublisherDisplayName>朱天雨</PublisherDisplayName>
     <Logo>Assets\Store\StoreLogo.png</Logo>
+    <!-- The system-proxy switch writes HKCU\...\Internet Settings, which MSIX
+         virtualizes away by default (writes land in a package-private copy:
+         "no errors, no effect"). Opting out here plus the unvirtualizedResources
+         capability below routes the write to the real user registry. Requires
+         Windows 10 2004+ (MinVersion 19041 already guarantees it). -->
+    <desktop6:RegistryWriteVirtualization>disabled</desktop6:RegistryWriteVirtualization>
   </Properties>
 
   <Dependencies>
@@ -88,6 +95,7 @@
   <Capabilities>
     <Capability Name="internetClient" />
     <rescap:Capability Name="runFullTrust" />
+    <rescap:Capability Name="unvirtualizedResources" />
     <DeviceCapability Name="location" />
   </Capabilities>
 </Package>

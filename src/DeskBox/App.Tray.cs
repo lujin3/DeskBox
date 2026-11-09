@@ -72,6 +72,16 @@ public partial class App
                 contextMenu,
                 OpenFeatureWidgetsFromTray));
 
+        var systemProxyToggleItem = new MenuFlyoutItem
+        {
+            Text = localization.T(GetSystemProxyTrayToggleKey()),
+            Width = TrayMenuItemWidth,
+            Icon = new FontIcon { Glyph = "\uE774" }
+        };
+        AttachTrayMenuItemInteraction(
+            systemProxyToggleItem,
+            () => RunTrayMenuActionAsync(contextMenu, ToggleSystemProxyFromTray));
+
         var eyeRestToggleItem = new MenuFlyoutItem
         {
             Text = localization.T(GetEyeRestTrayToggleKey()),
@@ -145,6 +155,7 @@ public partial class App
 
         contextMenu.Items.Add(mapFolderItem);
         contextMenu.Items.Add(addFeatureWidgetItem);
+        contextMenu.Items.Add(systemProxyToggleItem);
         contextMenu.Items.Add(eyeRestToggleItem);
         contextMenu.Items.Add(eyeRestBreakNowItem);
         contextMenu.Items.Add(new MenuFlyoutSeparator());
@@ -158,6 +169,7 @@ public partial class App
         _trayOrganizeDesktopItem = organizeDesktopItem;
         _trayMapFolderItem = mapFolderItem;
         _trayAddFeatureWidgetItem = addFeatureWidgetItem;
+        _systemProxyTrayToggleItem = systemProxyToggleItem;
         _eyeRestTrayToggleItem = eyeRestToggleItem;
         _eyeRestTrayBreakNowItem = eyeRestBreakNowItem;
         _trayOpenManagedStorageItem = openManagedStorageItem;
@@ -538,6 +550,14 @@ public partial class App
             _eyeRestTrayToggleItem.Text = LocalizationService.T(GetEyeRestTrayToggleKey());
             _eyeRestTrayBreakNowItem.IsEnabled =
                 eyeRestEnabled && !EyeRestOverlay.AnyActive;
+        }
+
+        // The system-proxy toggle label mirrors the live WinINet state on
+        // every menu open, so changes made from the card or Windows Settings
+        // are reflected without any push plumbing.
+        if (_systemProxyTrayToggleItem is not null)
+        {
+            _systemProxyTrayToggleItem.Text = LocalizationService.T(GetSystemProxyTrayToggleKey());
         }
 
         foreach (var item in _trayCreateWidgetItems.Values)
@@ -1167,6 +1187,11 @@ public partial class App
             _trayExitItem.Text = LocalizationService.T("Tray.Exit");
         }
 
+        if (_systemProxyTrayToggleItem is not null)
+        {
+            _systemProxyTrayToggleItem.Text = LocalizationService.T(GetSystemProxyTrayToggleKey());
+        }
+
         if (_eyeRestTrayToggleItem is not null)
         {
             _eyeRestTrayToggleItem.Text = LocalizationService.T(GetEyeRestTrayToggleKey());
@@ -1217,6 +1242,34 @@ public partial class App
         // label stays truthful across restarts and the settings page.
         bool enabled = App.Current._eyeRestSettings?.Read().Enabled ?? false;
         return enabled ? "Tray.EyeRest.ToggleOn" : "Tray.EyeRest.ToggleOff";
+    }
+
+    private static string GetSystemProxyTrayToggleKey()
+    {
+        // Same truth-on-open contract as the eye-rest label: the text shows
+        // the current WinINet state ("系统代理：开"/"系统代理：关") and the
+        // click flips it. Windows is the single source of truth, so this
+        // stays truthful no matter who changed the switch.
+        bool enabled = SystemProxyService.Read().Enabled;
+        return enabled ? "Tray.SystemProxy.ToggleOn" : "Tray.SystemProxy.ToggleOff";
+    }
+
+    /// <summary>
+    /// Tray system-proxy toggle: flips the Windows manual-proxy switch. The
+    /// SystemProxyService.StateChanged event resyncs any live card; a refusal
+    /// (empty ProxyServer) is logged and simply leaves the state unchanged.
+    /// </summary>
+    private void ToggleSystemProxyFromTray()
+    {
+        try
+        {
+            bool currentlyEnabled = SystemProxyService.Read().Enabled;
+            SystemProxyService.TrySetEnabled(!currentlyEnabled);
+        }
+        catch (Exception ex)
+        {
+            Log($"[SystemProxy] Tray toggle failed: {ex}");
+        }
     }
 
     /// <summary>

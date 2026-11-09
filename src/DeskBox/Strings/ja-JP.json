@@ -3057,5 +3057,12 @@
   "Settings.EyeRest.BackgroundFolder.Choose": "フォルダーを選択",
   "Tray.EyeRest.ToggleOn": "目の休憩：オン",
   "Tray.EyeRest.ToggleOff": "目の休憩：オフ",
+  "WidgetContent.SystemProxy.StatusLabel": "実装済み",
+  "WidgetContent.SystemProxy.StatusDescription": "Windows の手動システム プロキシを切り替える",
+  "SystemProxy.Title": "システム プロキシ",
+  "SystemProxy.ServerLabel": "プロキシ サーバー",
+  "SystemProxy.NotConfigured": "プロキシ サーバーが未設定です。先に Windows の設定で入力してください。",
+  "Tray.SystemProxy.ToggleOn": "システム プロキシ：オン",
+  "Tray.SystemProxy.ToggleOff": "システム プロキシ：オフ",
   "Tray.EyeRest.BreakNow": "今すぐ休憩"
 }

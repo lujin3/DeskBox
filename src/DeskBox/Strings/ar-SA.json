@@ -3057,5 +3057,12 @@
   "Settings.EyeRest.BackgroundFolder.Choose": "اختيار مجلد",
   "Tray.EyeRest.ToggleOn": "استراحات العناية بالعيون: مفعّلة",
   "Tray.EyeRest.ToggleOff": "استراحات العناية بالعيون: معطّلة",
+  "WidgetContent.SystemProxy.StatusLabel": "منفّذ",
+  "WidgetContent.SystemProxy.StatusDescription": "تبديل الخادم الوكيل اليدوي في Windows",
+  "SystemProxy.Title": "الخادم الوكيل للنظام",
+  "SystemProxy.ServerLabel": "الخادم الوكيل",
+  "SystemProxy.NotConfigured": "لم يتم تكوين خادم وكيل. عيّنه أولاً في إعدادات Windows.",
+  "Tray.SystemProxy.ToggleOn": "الخادم الوكيل للنظام: قيد التشغيل",
+  "Tray.SystemProxy.ToggleOff": "الخادم الوكيل للنظام: متوقف",
   "Tray.EyeRest.BreakNow": "خُذ استراحة الآن"
 }

@@ -3057,5 +3057,12 @@
   "Settings.EyeRest.BackgroundFolder.Choose": "Choose folder",
   "Tray.EyeRest.ToggleOn": "Eye-rest breaks: on",
   "Tray.EyeRest.ToggleOff": "Eye-rest breaks: off",
+  "WidgetContent.SystemProxy.StatusLabel": "Implemented",
+  "WidgetContent.SystemProxy.StatusDescription": "Toggle the Windows manual system proxy",
+  "SystemProxy.Title": "System Proxy",
+  "SystemProxy.ServerLabel": "Proxy server",
+  "SystemProxy.NotConfigured": "No proxy server configured. Set one in Windows Settings first.",
+  "Tray.SystemProxy.ToggleOn": "System proxy: on",
+  "Tray.SystemProxy.ToggleOff": "System proxy: off",
   "Tray.EyeRest.BreakNow": "Take a break now"
 }

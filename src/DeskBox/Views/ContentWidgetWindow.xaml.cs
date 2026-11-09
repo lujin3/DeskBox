@@ -1461,6 +1461,7 @@ IsHideAnimationRunning = true;
                         WidgetKind.Glance => "Glance.Title",
                         WidgetKind.Search => "Search.Title",
                         WidgetKind.SystemMonitor => "SystemMonitor.Title",
+                        WidgetKind.SystemProxy => "SystemProxy.Title",
                         _ => ""
                     };
                     if (!string.IsNullOrEmpty(key))

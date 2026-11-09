@@ -3057,5 +3057,12 @@
   "Settings.EyeRest.BackgroundFolder.Choose": "选择文件夹",
   "Tray.EyeRest.ToggleOn": "护眼休息：开",
   "Tray.EyeRest.ToggleOff": "护眼休息：关",
+  "WidgetContent.SystemProxy.StatusLabel": "已实现",
+  "WidgetContent.SystemProxy.StatusDescription": "系统代理开关",
+  "SystemProxy.Title": "系统代理",
+  "SystemProxy.ServerLabel": "代理服务器",
+  "SystemProxy.NotConfigured": "未设置代理服务器，请先在 Windows 设置中填写。",
+  "Tray.SystemProxy.ToggleOn": "系统代理：开",
+  "Tray.SystemProxy.ToggleOff": "系统代理：关",
   "Tray.EyeRest.BreakNow": "立即休息"
 }

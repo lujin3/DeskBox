@@ -3057,5 +3057,12 @@
   "Settings.EyeRest.BackgroundFolder.Choose": "Выбрать папку",
   "Tray.EyeRest.ToggleOn": "Перерывы для глаз: включены",
   "Tray.EyeRest.ToggleOff": "Перерывы для глаз: выключены",
+  "WidgetContent.SystemProxy.StatusLabel": "Реализовано",
+  "WidgetContent.SystemProxy.StatusDescription": "Переключение системного прокси Windows",
+  "SystemProxy.Title": "Системный прокси",
+  "SystemProxy.ServerLabel": "Прокси-сервер",
+  "SystemProxy.NotConfigured": "Прокси-сервер не настроен. Сначала задайте его в параметрах Windows.",
+  "Tray.SystemProxy.ToggleOn": "Системный прокси: включён",
+  "Tray.SystemProxy.ToggleOff": "Системный прокси: выключен",
   "Tray.EyeRest.BreakNow": "Сделать перерыв сейчас"
 }

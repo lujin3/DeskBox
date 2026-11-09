@@ -3057,5 +3057,12 @@
   "Settings.EyeRest.BackgroundFolder.Choose": "Ordner auswählen",
   "Tray.EyeRest.ToggleOn": "Augenschonende Pausen: an",
   "Tray.EyeRest.ToggleOff": "Augenschonende Pausen: aus",
+  "WidgetContent.SystemProxy.StatusLabel": "Implementiert",
+  "WidgetContent.SystemProxy.StatusDescription": "Den manuellen Windows-Systemproxy umschalten",
+  "SystemProxy.Title": "Systemproxy",
+  "SystemProxy.ServerLabel": "Proxyserver",
+  "SystemProxy.NotConfigured": "Kein Proxyserver konfiguriert. Lege zuerst einen in den Windows-Einstellungen fest.",
+  "Tray.SystemProxy.ToggleOn": "Systemproxy: ein",
+  "Tray.SystemProxy.ToggleOff": "Systemproxy: aus",
   "Tray.EyeRest.BreakNow": "Jetzt eine Pause machen"
 }

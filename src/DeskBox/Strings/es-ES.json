@@ -3057,5 +3057,12 @@
   "Settings.EyeRest.BackgroundFolder.Choose": "Elegir carpeta",
   "Tray.EyeRest.ToggleOn": "Descansos para la vista: activados",
   "Tray.EyeRest.ToggleOff": "Descansos para la vista: desactivados",
+  "WidgetContent.SystemProxy.StatusLabel": "Implementado",
+  "WidgetContent.SystemProxy.StatusDescription": "Alternar el proxy manual del sistema de Windows",
+  "SystemProxy.Title": "Proxy del sistema",
+  "SystemProxy.ServerLabel": "Servidor proxy",
+  "SystemProxy.NotConfigured": "No hay servidor proxy configurado. Configura primero uno en Configuración de Windows.",
+  "Tray.SystemProxy.ToggleOn": "Proxy del sistema: activado",
+  "Tray.SystemProxy.ToggleOff": "Proxy del sistema: desactivado",
   "Tray.EyeRest.BreakNow": "Descansar ahora"
 }

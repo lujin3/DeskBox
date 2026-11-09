@@ -134,7 +134,18 @@ public sealed class WidgetContentFactory
             IsFeatureWidget: true,
             SettingsSectionTag: "GlanceSettings",
             ChromeCategory: WidgetChromeCategory.Display,
-            DefaultChromeMode: WidgetChromeMode.Overlay)
+            DefaultChromeMode: WidgetChromeMode.Overlay),
+        new(
+            WidgetKind.SystemProxy,
+            "System Proxy",
+            "",
+            WidgetContentStage.Implemented,
+            CanShowInCreateEntry: false,
+            WidgetContentAvailability.Available,
+            "WidgetContent.SystemProxy.StatusLabel",
+            "WidgetContent.SystemProxy.StatusDescription",
+            HasSettingsPage: false,
+            IsFeatureWidget: true)
     ];
 
     private static readonly IReadOnlyDictionary<WidgetKind, WidgetContentDescriptor> Descriptors =
@@ -277,6 +288,7 @@ public sealed class WidgetContentFactory
             new WeatherWidgetContentProvider(),
             new GlanceWidgetContentProvider(),
             new SearchWidgetContentProvider(),
+            new SystemProxyWidgetContentProvider(),
             new PlaceholderWidgetContentProvider(WidgetKind.Tags),
             new PlaceholderWidgetContentProvider(WidgetKind.SystemMonitor)
         ];

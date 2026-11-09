@@ -141,6 +141,7 @@ public partial class App : Application
     private MenuFlyoutItem? _trayUpdateItem;
     private MenuFlyoutItem? _traySettingsItem;
     private MenuFlyoutItem? _trayExitItem;
+    private MenuFlyoutItem? _systemProxyTrayToggleItem;
     private MenuFlyoutItem? _eyeRestTrayToggleItem;
     private MenuFlyoutItem? _eyeRestTrayBreakNowItem;
     private SettingsWindow? _settingsWindow;

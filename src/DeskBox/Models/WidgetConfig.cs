@@ -288,7 +288,10 @@ public enum WidgetKind
     Productivity,
 
     /// <summary>At-a-glance background, time and date widget.</summary>
-    Glance
+    Glance,
+
+    /// <summary>Card that flips the Windows manual system-proxy (WinINet) switch.</summary>
+    SystemProxy
 }
 
 /// <summary>

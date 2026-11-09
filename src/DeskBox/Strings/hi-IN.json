@@ -3057,5 +3057,12 @@
   "Settings.EyeRest.BackgroundFolder.Choose": "फ़ोल्डर चुनें",
   "Tray.EyeRest.ToggleOn": "आँखों की देखभाल ब्रेक: चालू",
   "Tray.EyeRest.ToggleOff": "आँखों की देखभाल ब्रेक: बंद",
+  "WidgetContent.SystemProxy.StatusLabel": "लागू",
+  "WidgetContent.SystemProxy.StatusDescription": "Windows मैनुअल सिस्टम प्रॉक्सी टॉगल करें",
+  "SystemProxy.Title": "सिस्टम प्रॉक्सी",
+  "SystemProxy.ServerLabel": "प्रॉक्सी सर्वर",
+  "SystemProxy.NotConfigured": "कोई प्रॉक्सी सर्वर कॉन्फ़िगर नहीं है। पहले Windows सेटिंग्स में सेट करें।",
+  "Tray.SystemProxy.ToggleOn": "सिस्टम प्रॉक्सी: चालू",
+  "Tray.SystemProxy.ToggleOff": "सिस्टम प्रॉक्सी: बंद",
   "Tray.EyeRest.BreakNow": "अभी ब्रेक लें"
 }
