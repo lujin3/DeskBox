@@ -153,12 +153,13 @@ public sealed class EyeRestSettingsCoordinator : IEyeRestSettings
 
     /// <summary>
     /// One break's resolved overlay surface. The window paints the raw
-    /// background under Focust's scrim with its frosted-glass card as fixed
-    /// presentation (PromptApp.vue); this surface carries only what settings
-    /// actually influence — the effective theme (for the templated button
-    /// states) and the Focust tier colors: slate-950/35 scrim, white text
-    /// tiers (the scrim is dark in both themes, so dark ink text would sink
-    /// into it), the progress arc in the same white family Focust uses.
+    /// background under the slate-950/35 scrim with its frosted-glass card;
+    /// the countdown core is a HUD (PromptApp-redesign): the progress arc
+    /// family is cyan 00E5FF — a faint cyan track under a full-cyan arc —
+    /// with the text tiers staying white (the scrim is dark in both themes,
+    /// so dark ink text would sink into it). This surface carries only what
+    /// settings actually influence: the effective theme (for the templated
+    /// button states) and those tier colors.
     /// </summary>
     public EyeRestOverlaySurface ReadOverlaySurface()
     {
@@ -177,8 +178,8 @@ public sealed class EyeRestSettingsCoordinator : IEyeRestSettings
             CountdownColor: Argb(0xFF, 0xFF, 0xFF, 0xFF),
             TipColor: Argb(0xE6, 0xFF, 0xFF, 0xFF),
             HintColor: Argb(0x80, 0xFF, 0xFF, 0xFF),
-            RingTrackColor: Argb(0x26, 0xFF, 0xFF, 0xFF),
-            RingArcColor: Argb(0xE6, 0xFF, 0xFF, 0xFF));
+            RingTrackColor: Argb(0x26, 0x00, 0xE5, 0xFF),
+            RingArcColor: Argb(0xFF, 0x00, 0xE5, 0xFF));
     }
 
     private static Color Argb(byte a, byte r, byte g, byte b) => Color.FromArgb(a, r, g, b);
