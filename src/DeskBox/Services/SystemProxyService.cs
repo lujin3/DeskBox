@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.Threading;
 using Microsoft.Win32;
 
 namespace DeskBox.Services;
@@ -33,9 +34,10 @@ internal static class SystemProxyService
     private const int InternetOptionRefresh = 37;
 
     /// <summary>
-    /// Raised on the writing thread after a successful toggle, so live UI
-    /// (card, tray) can resync from the system state. Not raised for external
-    /// changes made outside this process.
+    /// Raised whenever the proxy state actually changed — after a successful
+    /// in-process toggle AND after an external change (Windows Settings, any
+    /// other proxy tool) picked up by the registry watcher. Raised on the
+    /// writing/watching thread; UI subscribers must marshal themselves.
     /// </summary>
     public static event Action? StateChanged;
 
@@ -96,6 +98,7 @@ internal static class SystemProxyService
         NotifyWinInetSettingsChanged();
 
         App.Log($"[SystemProxy] Manual proxy → {(enable ? "on" : "off")}");
+        s_lastNotified = Read();
         StateChanged?.Invoke();
         return true;
     }
@@ -105,6 +108,107 @@ internal static class SystemProxyService
         _ = InternetSetOption(IntPtr.Zero, InternetOptionSettingsChanged, IntPtr.Zero, 0);
         _ = InternetSetOption(IntPtr.Zero, InternetOptionRefresh, IntPtr.Zero, 0);
     }
+
+    // ─── Registry watcher ──────────────────────────────────────
+    //
+    // The card mirrors live system state, but desktop widgets never get
+    // activated and only re-read on reveal — so changes made outside this
+    // process (Windows Settings, other proxy tools) would never reach the
+    // card without a watcher. RegNotifyChangeKeyValue arms an asynchronous
+    // notification on the Internet Settings key; a background thread waits on
+    // it and raises StateChanged whenever the snapshot actually changed.
+
+    private const int RegNotifyChangeLastSet = 0x4;
+
+    private static int s_watcherStarted;
+    private static SystemProxyState s_lastNotified = new(false, string.Empty, string.Empty);
+
+    /// <summary>
+    /// Idempotent start of the registry watcher. Called by the widget view
+    /// model; the watcher thread lives for the process lifetime and is a
+    /// background thread, so it never blocks shutdown.
+    /// </summary>
+    public static void EnsureWatcherStarted()
+    {
+        if (Interlocked.CompareExchange(ref s_watcherStarted, 1, 0) != 0)
+        {
+            return;
+        }
+
+        var thread = new Thread(WatchRegistryLoop)
+        {
+            IsBackground = true,
+            Name = "DeskBox-SystemProxyWatch"
+        };
+        thread.Start();
+    }
+
+    private static void WatchRegistryLoop()
+    {
+        try
+        {
+            // The notification is tied to this key handle, so it must stay
+            // open for as long as the watcher runs.
+            using RegistryKey? watchKey =
+                Registry.CurrentUser.OpenSubKey(InternetSettingsKeyPath);
+            if (watchKey is null)
+            {
+                App.Log("[SystemProxy] Watcher: Internet Settings key missing");
+                return;
+            }
+
+            using var changed = new AutoResetEvent(false);
+            s_lastNotified = Read();
+
+            while (true)
+            {
+                int rc = RegNotifyChangeKeyValue(
+                    watchKey.Handle.DangerousGetHandle(),
+                    watchSubtree: false,
+                    RegNotifyChangeLastSet,
+                    changed.SafeWaitHandle.DangerousGetHandle(),
+                    fAsynchronous: true);
+                if (rc != 0)
+                {
+                    App.Log($"[SystemProxy] Watcher arm failed rc={rc}");
+                    return;
+                }
+
+                if (!changed.WaitOne())
+                {
+                    continue;
+                }
+
+                // Windows Settings rewrites several values in one toggle;
+                // coalesce the burst into one read.
+                Thread.Sleep(150);
+
+                var state = Read();
+                if (state == s_lastNotified)
+                {
+                    continue;
+                }
+
+                s_lastNotified = state;
+                App.Log(
+                    $"[SystemProxy] Watcher: state → Enabled={state.Enabled} " +
+                    $"Server='{state.Server}'");
+                StateChanged?.Invoke();
+            }
+        }
+        catch (Exception ex)
+        {
+            App.Log($"[SystemProxy] Watcher stopped: {ex}");
+        }
+    }
+
+    [DllImport("advapi32.dll", SetLastError = true)]
+    private static extern int RegNotifyChangeKeyValue(
+        IntPtr hKey,
+        bool watchSubtree,
+        int dwNotifyFilter,
+        IntPtr hEvent,
+        bool fAsynchronous);
 
     [DllImport("wininet.dll", SetLastError = true)]
     private static extern bool InternetSetOption(

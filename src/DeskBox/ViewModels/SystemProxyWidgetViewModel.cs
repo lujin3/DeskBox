@@ -35,8 +35,14 @@ public sealed partial class SystemProxyWidgetViewModel : ObservableObject, IDisp
         _localizationService.LanguageChanged += OnLanguageChanged;
         SystemProxyService.StateChanged += OnSystemProxyStateChanged;
 
+        // The card must track changes made outside this process (Windows
+        // Settings, other proxy tools); the watcher pushes those as
+        // StateChanged events.
+        SystemProxyService.EnsureWatcherStarted();
+
         ApplyLocalizedTexts();
         RefreshFromSystem();
+        App.Log("[SystemProxyCard] View model created");
     }
 
     private static DispatcherQueue? TryGetCurrentDispatcherQueue()
@@ -111,6 +117,7 @@ public sealed partial class SystemProxyWidgetViewModel : ObservableObject, IDisp
         }
 
         bool applied = SystemProxyService.TrySetEnabled(enable);
+        App.Log($"[SystemProxyCard] Toggle requested {enable} → applied={applied}");
         if (!applied)
         {
             // StateChanged never fired — pull the authoritative value so the
@@ -168,10 +175,17 @@ public sealed partial class SystemProxyWidgetViewModel : ObservableObject, IDisp
     private void RefreshFromSystem()
     {
         var state = SystemProxyService.Read();
+        bool changed = state.Enabled != IsProxyEnabled || state.Server != ServerText;
         IsProxyEnabled = state.Enabled;
         ServerText = state.HasServer ? state.Server : string.Empty;
         OnPropertyChanged(nameof(ServerRowVisibility));
         OnPropertyChanged(nameof(NotConfiguredVisibility));
+        if (changed)
+        {
+            App.Log(
+                $"[SystemProxyCard] State → Enabled={state.Enabled} " +
+                $"Server='{state.Server}'");
+        }
     }
 
     private void ApplyLocalizedTexts()
