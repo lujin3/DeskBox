@@ -265,6 +265,8 @@ internal sealed class EyeRestOverlayWindow
     private readonly TranslateTransform _headOffset = new();
     private readonly Button _resumeButton;
     private readonly TimeSpan _duration;
+    private Ellipse? _tickRing;
+    private Ellipse? _segmentRing;
     private Storyboard? _spinStoryboard;
     private bool _closed;
 
@@ -518,6 +520,10 @@ internal sealed class EyeRestOverlayWindow
             }
 
             StartEntranceAnimation(entranceTarget);
+            // Post-show start: the content tree is attached to a live
+            // XamlRoot here (the same proven timing as the entrance
+            // storyboard above), so the ring spins are safe to begin.
+            StartSpins();
         }
         catch (Exception ex) when (
             ex is COMException or InvalidOperationException or ArgumentException)
@@ -662,7 +668,13 @@ internal sealed class EyeRestOverlayWindow
         grid.Children.Add(head);
         grid.Children.Add(center);
 
-        StartSpins(ticks, segments);
+        // The decorative rings are parked in fields; their spin storyboard
+        // starts only after the window is shown (StartSpins from the
+        // placement block below): a storyboard begun on elements that have
+        // no XamlRoot yet is at best a silent no-op and at worst a
+        // fail-fast inside the animation engine.
+        _tickRing = ticks;
+        _segmentRing = segments;
         return grid;
     }
 
@@ -694,17 +706,24 @@ internal sealed class EyeRestOverlayWindow
     }
 
     /// <summary>
-    /// Starts the two decorative rotations in one storyboard. An
-    /// animation-engine failure leaves the rings static — the countdown
-    /// itself never depends on them.
+    /// Starts the two decorative rotations in one storyboard. Called only
+    /// after the window has been created and shown, when the rings are
+    /// attached to a XamlRoot — a storyboard begun on detached elements
+    /// destabilizes the animation engine. An animation-engine failure
+    /// leaves the rings static: the countdown itself never depends on them.
     /// </summary>
-    private void StartSpins(Ellipse tickRing, Ellipse segmentRing)
+    private void StartSpins()
     {
+        if (_tickRing is null || _segmentRing is null)
+        {
+            return;
+        }
+
         try
         {
             var storyboard = new Storyboard();
-            AddSpin(storyboard, tickRing, TickRingSpinSeconds, clockwise: true);
-            AddSpin(storyboard, segmentRing, SegmentRingSpinSeconds, clockwise: false);
+            AddSpin(storyboard, _tickRing, TickRingSpinSeconds, clockwise: true);
+            AddSpin(storyboard, _segmentRing, SegmentRingSpinSeconds, clockwise: false);
             storyboard.Begin();
             _spinStoryboard = storyboard;
         }
@@ -897,17 +916,32 @@ internal sealed class EyeRestOverlayWindow
             return;
         }
 
+        // Each Path owns its OWN Geometry instance: a Geometry is a
+        // single tree-position object in WinUI, and assigning one instance
+        // to both the arc and its glow twin fails the composition engine
+        // with an uncatchable fail-fast that takes the whole process down
+        // (the overlay crash: show, first arc rebuild, process exit).
         bool full = elapsedFraction >= 0.9995;
-        Geometry geometry = full
-            ? new EllipseGeometry
+        if (full)
+        {
+            _ringArc.Data = new EllipseGeometry
             {
                 Center = new Point(CoreCenter, CoreCenter),
                 RadiusX = ProgressRadius,
                 RadiusY = ProgressRadius
-            }
-            : BuildArc(elapsedFraction);
-        _ringArc.Data = geometry;
-        _ringGlow.Data = geometry;
+            };
+            _ringGlow.Data = new EllipseGeometry
+            {
+                Center = new Point(CoreCenter, CoreCenter),
+                RadiusX = ProgressRadius,
+                RadiusY = ProgressRadius
+            };
+        }
+        else
+        {
+            _ringArc.Data = BuildArc(elapsedFraction);
+            _ringGlow.Data = BuildArc(elapsedFraction);
+        }
 
         double angle = -Math.PI / 2 + elapsedFraction * 2 * Math.PI;
         _headOffset.X = ProgressRadius * Math.Cos(angle);
