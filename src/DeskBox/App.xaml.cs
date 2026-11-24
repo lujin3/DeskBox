@@ -1,4 +1,4 @@
-﻿// Copyright (c) DeskBox. All rights reserved.
+// Copyright (c) DeskBox. All rights reserved.
 
 using CommunityToolkit.Mvvm.Input;
 using DeskBox.Controls.WidgetContents;
@@ -9,6 +9,7 @@ using DeskBox.Contracts;
 using DeskBox.Features.Search;
 using DeskBox.Features.Backup;
 using DeskBox.Features.QuickCapture;
+using DeskBox.Features.Clipboard;
 using DeskBox.Helpers;
 using DeskBox.Models;
 using DeskBox.Platform;
@@ -19,8 +20,8 @@ using DeskBox.Views;
 // static calls go through this alias.
 using AppUpdateServiceStatic = DeskBox.Services.AppUpdateService;
 using System.Diagnostics;
-using H.NotifyIcon;
-using H.NotifyIcon.Core;
+
+
 using Microsoft.Windows.AppLifecycle;
 using Microsoft.Windows.AppNotifications;
 using Microsoft.Windows.AppNotifications.Builder;
@@ -31,7 +32,6 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.Win32;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
-using Microsoft.Extensions.DependencyInjection;
 using DrawingPoint = System.Drawing.Point;
 using WinRT.Interop;
 
@@ -85,14 +85,18 @@ public partial class App : Application
     // Feature-runtime registry keys (Services/FeatureRuntimeRegistry). They
     // intentionally read like the matching shutdown step names.
     private const string SearchFeatureRuntimeId = "search";
-    private const string QuickCaptureFeatureRuntimeId = "quick-capture";
     private const string TodoRemindersFeatureRuntimeId = "todo-reminders";
     private const string EyeRestFeatureRuntimeId = "eye-rest";
+    private const string ClipboardFeatureRuntimeId = "clipboard";
     private const string PendingJumpListArgumentFileName = "pending-jumplist-arg.txt";
     private const string PendingUpdateInstallResultFileName = "pending-update-install-result.txt";
     private const string VerboseLoggingEnvironmentVariable = "DESKBOX_VERBOSE_LOG";
     private static readonly bool EnableVerboseLogging = IsEnabledEnvironmentValue(
         Environment.GetEnvironmentVariable(VerboseLoggingEnvironmentVariable));
+    private static readonly bool EnableStartupProcessSnapshotDiagnostics =
+        EnableVerboseLogging ||
+        IsEnabledEnvironmentValue(Environment.GetEnvironmentVariable("DESKBOX_PERF_LOG")) ||
+        IsEnabledEnvironmentValue(Environment.GetEnvironmentVariable("DESKBOX_STARTUP_DIAGNOSTICS"));
 
     // The settings-host process logs to its own file (batch 3c-3b): the
     // static initializer must judge by command line because the instance
@@ -100,7 +104,9 @@ public partial class App : Application
     private static readonly string LogPath =
         App.SettingsHostLaunch.IsSettingsHostLaunch(Environment.GetCommandLineArgs())
             ? DeskBoxDataPathService.Current.SettingsHostLogFilePath
-            : DeskBoxDataPathService.Current.LogFilePath;
+            : App.StudioHostLaunch.IsStudioHostLaunch(Environment.GetCommandLineArgs())
+                ? DeskBoxDataPathService.Current.StudioHostLogFilePath
+                : DeskBoxDataPathService.Current.LogFilePath;
     private static readonly NativeNotificationActivationEnvelopeStore
         PendingNativeNotificationActivationStore = new(
             DeskBoxDataPathService.Current.RootPath);
@@ -128,23 +134,21 @@ public partial class App : Application
     private bool SuppressFileMutatingStartup =>
         _startupStormAssessment?.SuppressFileMutatingStartup == true;
 
-    private TaskbarIcon? _trayIcon;
-    private Window? _trayWindow;
-    private Window? _folderPickerHelperWindow;
-    private MenuFlyout? _trayContextMenu;
-    private bool _traySecondWindowSyncLogged;
-    private MenuFlyoutItem? _trayOrganizeDesktopItem;
-    private MenuFlyoutItem? _trayMapFolderItem;
-    private MenuFlyoutItem? _trayAddFeatureWidgetItem;
-    private readonly Dictionary<WidgetKind, MenuFlyoutItem> _trayCreateWidgetItems = [];
-    private MenuFlyoutItem? _trayOpenManagedStorageItem;
-    private MenuFlyoutItem? _trayUpdateItem;
-    private MenuFlyoutItem? _traySettingsItem;
-    private MenuFlyoutItem? _trayExitItem;
-    private MenuFlyoutItem? _systemProxyTrayToggleItem;
-    private MenuFlyoutItem? _eyeRestTrayToggleItem;
-    private MenuFlyoutItem? _eyeRestTrayBreakNowItem;
-    private SettingsWindow? _settingsWindow;
+    private NativeTrayIconHost? _trayHost;
+    private IntPtr _folderPickerHelperWindowHandle;
+    private Window? _xamlLoopLifelineWindow;
+
+
+
+
+
+
+
+
+
+
+
+
     private OnboardingWindow? _onboardingWindow;
     private ElevationNoticeWindow? _elevationNoticeWindow;
     private RecoveryOfferWindow? _recoveryOfferWindow;
@@ -177,6 +181,9 @@ public partial class App : Application
     private EyeRestSettingsCoordinator? _eyeRestSettings;
     private SearchSettingsCoordinator? _searchSettings;
     private SearchFeatureRuntime? _searchFeatureRuntime;
+    private ClipboardFeatureRuntime? _clipboardFeatureRuntime;
+    private ClipboardHistoryService? _clipboardHistoryService;
+    internal ClipboardHistoryService ClipboardHistoryService => EnsureClipboardHistoryService();
     private BackupSettingsCoordinator? _backupSettings;
     private BackupRestoreActions? _backupRestoreActions;
     private QuickCaptureSettingsCoordinator? _quickCaptureSettings;
@@ -190,15 +197,16 @@ public partial class App : Application
     private ManagedStorageSettingsCoordinator? _managedStorageSettings;
     private MaintenanceSettingsCoordinator? _maintenanceSettings;
     private PerformanceSettingsCoordinator? _performanceSettings;
-    private QuickCaptureClipboardRuntime? _quickCaptureClipboardRuntime;
     private BackupRuntime? _backupRuntime;
     private readonly ShutdownSequence _shutdownSequence = new(Log);
     private static int s_shutdownRequested;
     internal static bool IsShuttingDown => Volatile.Read(ref s_shutdownRequested) != 0;
     private static readonly TimeSpan ShutdownHardTerminateGrace = TimeSpan.FromSeconds(3);
     private TodoReminderService? _todoReminderService => _todoReminderRuntime?.Current as TodoReminderService;
+    private MonitorOcclusionTracker? _monitorOcclusionTracker;
     private DisplayAreaWatcherService? _displayAreaWatcher;
     private DisplayTopologyTransitionCoordinator? _displayTopologyTransitionCoordinator;
+    private bool _backupTimerStarted;
     private AppLifecycleRecoveryWatcher? _lifecycleRecoveryWatcher;
     private HookHealthWatchdog? _hookHealthWatchdog;
     private EverythingSearchService? _everythingSearchService;
@@ -206,6 +214,8 @@ public partial class App : Application
     private FileMetaService? _fileMetaService;
     private SearchHotkeyService? _searchHotkeyService;
     private SearchPopupWindow? _searchPopupWindow;
+    private ClipboardHotkeyService? _clipboardHotkeyService;
+    private ClipboardQuickPasteWindow? _clipboardQuickPasteWindow;
     private Microsoft.UI.Dispatching.DispatcherQueueTimer? _visibleIdleMemoryMaintenanceTimer;
     private int _visibleIdleMemoryMaintenanceRunning;
     private readonly VisibleIdleMemoryTracker _visibleIdleMemoryTracker = new(
@@ -239,9 +249,22 @@ public partial class App : Application
     internal StartupElevationAssessment StartupElevation => _startupElevationAssessment;
     private bool _cloudBackupUnverifiedToastShown;
 
-    public static new App Current => (App)Application.Current;
+    public static new App Current
+    {
+        get
+        {
+            try
+            {
+                return (App)Application.Current;
+            }
+            catch (System.Runtime.InteropServices.COMException)
+            {
+                return null!;
+            }
+        }
+    }
 
-    public static Microsoft.UI.Dispatching.DispatcherQueue UiDispatcherQueue { get; private set; } = null!;
+    public static Microsoft.UI.Dispatching.DispatcherQueue UiDispatcherQueue { get; internal set; } = null!;
 
     /// <summary>
     /// Raised after an external display topology change (hot-plug, resolution
@@ -250,6 +273,8 @@ public partial class App : Application
     /// stale arrangement previews.
     /// </summary>
     public event Action? DisplayTopologyChanged;
+
+    protected void RaiseDisplayTopologyChanged() => DisplayTopologyChanged?.Invoke();
 
     /// <summary>
     /// Raised (UI thread) when a widget's screen home changes anywhere —
@@ -267,25 +292,90 @@ public partial class App : Application
     public bool IsStartupMode { get; set; }
 
     public AppDistributionService DistributionService { get; } = AppDistributionService.Current;
-    public ServiceProvider Services { get; private set; } = null!;
-    public SettingsService SettingsService { get; private set; } = null!;
-    public DeskBoxDataBackupService DataBackupService { get; private set; } = null!;
-    internal CloudBackupService CloudBackupService { get; private set; } = null!;
-    public DeskBoxAttachmentHealthService AttachmentHealthService { get; private set; } = null!;
-    public FileService FileService { get; private set; } = null!;
-    public OrganizerService OrganizerService { get; private set; } = null!;
-    public ManagedStorageDesktopShortcutService ManagedStorageDesktopShortcutService { get; private set; } = null!;
-    public IAppUpdateService AppUpdateService { get; private set; } = null!;
-    public QuickCaptureService QuickCaptureService { get; private set; } = null!;
-    public QuickCaptureClipboardService? QuickCaptureClipboardService =>
-        _quickCaptureClipboardRuntime?.Current as QuickCaptureClipboardService;
+    public DeskBoxServiceContainer Services { get; private set; } = null!;
+    public SettingsService SettingsService { get; internal set; } = null!;
+    private DeskBoxDataBackupService? _dataBackupService;
+    private CloudBackupService? _cloudBackupService;
+    public DeskBoxDataBackupService DataBackupService => _dataBackupService ??= ConfigureDataBackupService(Services.DataBackupService);
+    internal CloudBackupService CloudBackupService => _cloudBackupService ??= ConfigureCloudBackupService(Services.CloudBackupService);
+    private DeskBoxAttachmentHealthService? _attachmentHealthService;
+    private FileService? _fileService;
+    private OrganizerService? _organizerService;
+    private ManagedStorageDesktopShortcutService? _managedStorageDesktopShortcutService;
+    private IAppUpdateService? _appUpdateService;
+    private bool _appUpdateCheckSubscribed;
+    private QuickCaptureService? _quickCaptureService;
+    private QuickCaptureMarkdownMirrorService? _quickCaptureMirrorService;
+    private ResizeGuideOverlayService? _resizeGuideOverlay;
+
+    public DeskBoxAttachmentHealthService AttachmentHealthService
+    {
+        get => _attachmentHealthService ??= Services.AttachmentHealthService;
+        private set => _attachmentHealthService = value;
+    }
+
+    public FileService FileService
+    {
+        get => _fileService ??= Services.FileService;
+        private set => _fileService = value;
+    }
+
+    public OrganizerService OrganizerService
+    {
+        get => _organizerService ??= Services.OrganizerService;
+        private set => _organizerService = value;
+    }
+
+    public ManagedStorageDesktopShortcutService ManagedStorageDesktopShortcutService
+    {
+        get => _managedStorageDesktopShortcutService ??= Services.ManagedStorageDesktopShortcutService;
+        private set => _managedStorageDesktopShortcutService = value;
+    }
+
+    public IAppUpdateService AppUpdateService
+    {
+        get
+        {
+            if (_appUpdateService is null)
+            {
+                _appUpdateService = Services.AppUpdateService;
+            }
+
+            if (!_appUpdateCheckSubscribed && _appUpdateService is not null)
+            {
+                _appUpdateCheckSubscribed = true;
+                _appUpdateService.CheckCompleted += OnUpdateCheckCompleted;
+            }
+
+            return _appUpdateService!;
+        }
+        private set
+        {
+            _appUpdateService = value;
+            _appUpdateCheckSubscribed = false;
+            if (value is not null)
+            {
+                _appUpdateCheckSubscribed = true;
+                value.CheckCompleted += OnUpdateCheckCompleted;
+            }
+        }
+    }
+
+    public QuickCaptureService QuickCaptureService
+    {
+        get => _quickCaptureService ??= Services.QuickCaptureService;
+        private set => _quickCaptureService = value;
+    }
+    internal QuickCaptureMarkdownMirrorService? QuickCaptureMirrorService => _quickCaptureMirrorService;
+
     internal QuickCaptureSettingsCoordinator QuickCaptureSettings =>
         _quickCaptureSettings ?? throw new InvalidOperationException("Quick Capture is not initialized.");
-    public LocalizationService LocalizationService { get; private set; } = null!;
+    public LocalizationService LocalizationService { get; internal set; } = null!;
     public ThemeService ThemeService { get; private set; } = null!;
     public GlobalHotkeyService? GlobalHotkeyService { get; private set; }
     public DesktopDoubleClickActivationService? DesktopDoubleClickActivationService { get; private set; }
     public SearchHotkeyService? SearchHotkeyService => _searchHotkeyService;
+    public ClipboardHotkeyService? ClipboardHotkeyService => _clipboardHotkeyService;
     public SearchEngineService? SearchEngineService => _searchEngineService;
     public EverythingSearchService? EverythingSearchService => _everythingSearchService;
     public AppDiagnosticsService? DiagnosticsService => _diagnosticsService;
@@ -297,12 +387,78 @@ public partial class App : Application
         _everythingSearchService?.CurrentSnapshot.State == EverythingConnectionState.Connected;
     internal int SearchMetaCacheCount => _fileMetaService?.CachedIconCount ?? 0;
     public WidgetManager? WidgetManager { get; private set; }
-    public ResizeGuideOverlayService ResizeGuideOverlay { get; private set; } = null!;
+
+    public ResizeGuideOverlayService ResizeGuideOverlay
+    {
+        get
+        {
+            if (_resizeGuideOverlay is null)
+            {
+                var overlay = Services.ResizeGuideOverlayService;
+                if (SettingsService is not null)
+                {
+                    SyncResizeGuideOverlayFromSettings(overlay);
+                }
+
+                _resizeGuideOverlay = overlay;
+            }
+
+            return _resizeGuideOverlay;
+        }
+        private set => _resizeGuideOverlay = value;
+    }
+
+    private void SyncResizeGuideOverlayFromSettings(ResizeGuideOverlayService overlay)
+    {
+        overlay.IsSnapEnabled = SettingsService.Settings.ResizeSnapEnabled;
+        overlay.SnapSpacingDips = SettingsService.Settings.WidgetSnapSpacing;
+    }
+
     public NativeAppNotificationService? NativeNotificationService => _nativeNotificationService;
     public DisplayAreaWatcherService? DisplayAreaWatcher => _displayAreaWatcher;
+    internal MonitorOcclusionTracker? MonitorOcclusionTracker => _monitorOcclusionTracker;
     public TodoReminderService? TodoReminderService => _todoReminderService;
     public DesktopAutoOrganizationWatcher? DesktopAutoOrganizationWatcher { get; private set; }
-    public SettingsWindow? SettingsWindowInstance => _settingsWindow;
+    internal IntPtr GetVisibleSettingsWindowHandle() => GetVisibleSettingsWindowHandleCore();
+
+    internal IntPtr GetStoreUpdateOwnerWindowHandle() => ResolveStoreUpdateOwnerWindowHandle();
+
+    private IntPtr GetVisibleSettingsWindowHandleCore()
+    {
+#if DESKBOX_NATIVE_AOT && DESKBOX_AOT_SMOKE_HARNESS
+        IntPtr smokeHwnd = TryGetInProcessSettingsWindowHandleForSmoke();
+        if (smokeHwnd != IntPtr.Zero)
+        {
+            return smokeHwnd;
+        }
+#endif
+        if (_settingsHostWindow is { IsVisibleToUser: true } hostWindow)
+        {
+            return WinRT.Interop.WindowNative.GetWindowHandle(hostWindow);
+        }
+
+        return IntPtr.Zero;
+    }
+
+    private IntPtr GetAnySettingsHostWindowHandle()
+    {
+        if (_settingsHostWindow is { } hostWindow)
+        {
+            return WinRT.Interop.WindowNative.GetWindowHandle(hostWindow);
+        }
+
+        return IntPtr.Zero;
+    }
+
+#if DESKBOX_NATIVE_AOT && DESKBOX_AOT_SMOKE_HARNESS
+    private bool HasInProcessSettingsWindow => HasInProcessSettingsWindowForSmoke();
+    private Task StopInProcessSettingsCloudBackupActionsAsync() => StopInProcessSettingsCloudBackupActionsForSmokeAsync();
+    private void CloseInProcessSettingsWindowForShutdown() => CloseInProcessSettingsWindowForSmokeShutdown();
+#else
+    private bool HasInProcessSettingsWindow => false;
+    private static Task StopInProcessSettingsCloudBackupActionsAsync() => Task.CompletedTask;
+    private static void CloseInProcessSettingsWindowForShutdown() { }
+#endif
 
     public static bool IsVerboseLoggingEnabled => EnableVerboseLogging;
 
@@ -319,15 +475,27 @@ public partial class App : Application
         // still held the single-instance mutex) waits here for its parent to
         // exit before the mutex is taken, so the takeover cannot be mistaken
         // for a secondary instance and forwarded into the old process.
-        WaitForRelaunchParentExit(Environment.GetCommandLineArgs());
+        string[] effectiveCommandLineArgs = SingleInstanceAndActivationInterop.GetEffectiveLaunchCommandLineArgs(
+            Environment.GetCommandLineArgs(),
+            TryGetPackagedLaunchArguments());
+        WaitForRelaunchParentExit(effectiveCommandLineArgs);
 
-        // Settings host (batch 3c-3b): a second-process settings launch skips
-        // every primary-instance responsibility below (AUMID, activation
-        // event, single-instance mutex, watchdog, elevation gate, DI
-        // container) — see App.SettingsHost.cs.
-        if (SettingsHostLaunch.IsSettingsHostLaunch(Environment.GetCommandLineArgs()))
+        // Settings host (batch 3c-3b): a second-process settings launch
+        // (DeskBox.exe --settings <mainPid>) skips every primary-instance
+        // responsibility below (AUMID, activation event, single-instance
+        // mutex, watchdog, elevation gate, DI container) — see
+        // App.SettingsHost.cs. One executable serves both roles on every
+        // channel: Native AOT links all code statically into each .exe, so a
+        // separate settings executable would duplicate the whole app image
+        // while the process split alone already provides the memory release.
+        if (SettingsHostLaunch.IsSettingsHostLaunch(effectiveCommandLineArgs))
         {
             InitializeSettingsHost();
+            return;
+        }
+        if (StudioHostLaunch.IsStudioHostLaunch(effectiveCommandLineArgs))
+        {
+            InitializeStudioHost(effectiveCommandLineArgs);
             return;
         }
 
@@ -336,19 +504,96 @@ public partial class App : Application
         JumpListService.RegisterAppUserModelId();
 
         Log("App() constructor start");
+        string[] commandLineArgs = effectiveCommandLineArgs;
         _processStartupLaunchDetected = StartupLaunchPolicy.IsStartupLaunch(
-            Environment.GetCommandLineArgs(),
-            isStartupTaskActivation: IsStartupTaskActivation());
-        _activationEvent = new EventWaitHandle(
-            false,
-            EventResetMode.AutoReset,
-            DeskBoxDataPathService.Current.ActivationEventName);
-        _singleInstanceMutex = new Mutex(
-            true,
+            commandLineArgs, SingleInstanceAndActivationInterop.TryGetPackagedProtocolUri(Log), IsStartupTaskActivation());
+        bool notificationLaunch = NativeNotificationActivationBootstrap.IsNotificationLaunch(
+            commandLineArgs);
+
+        // Pre-mutex elevation self-heal: when DeskBox launches elevated above a
+        // standard-user Explorer (AppAboveShell), clear persisted RunAs sources
+        // and hand execution back to Explorer's Medium integrity BEFORE creating
+        // _activationEvent, _singleInstanceMutex, or _startupSessionLedger.
+        // Exiting here avoids stamping High-integrity DACLs/mandatory labels onto
+        // the single-instance kernel objects and eliminates the blocking notice
+        // window for accidental interactive or autostart elevation. If relaunch
+        // fails, execution falls through to normal startup and OnLaunched still
+        // surfaces ElevationNoticeWindow as the honest fallback.
+        _startupElevationAssessment = DragDropPermissionService.AssessStartupElevation();
+        if (_startupElevationAssessment.IsCurrentProcessElevated)
+        {
+            Log(
+                $"[Elevation] Elevated launch detected " +
+                $"uacDisabled={_startupElevationAssessment.IsUacDisabled} " +
+                $"explorerElevated={_startupElevationAssessment.IsExplorerElevated} " +
+                $"canRelaunch={_startupElevationAssessment.CanRelaunchUnelevated} " +
+                $"mismatch={_startupElevationAssessment.Mismatch}");
+            if (_startupElevationAssessment.Mismatch == ShellIntegrityMismatch.AppAboveShell)
+            {
+                _ = DragDropPermissionService.ClearElevationCompatibilityFlags();
+                _ = DragDropPermissionService.ClearShortcutRunAsFlags();
+
+                bool alreadyRelaunchedForElevation =
+                    TryGetAwaitParentExitProcessId(commandLineArgs) is not null;
+                bool automatedHarnessLaunch = IsAutomatedProbeOrSmokeLaunch(commandLineArgs);
+                if (_startupElevationAssessment.CanRelaunchUnelevated &&
+                    !alreadyRelaunchedForElevation &&
+                    !notificationLaunch &&
+                    !automatedHarnessLaunch)
+                {
+                    string? packagedProtocolUri = DeskBoxProtocolActivationService.TryExtractProtocolUri(
+                        null,
+                        SingleInstanceAndActivationInterop.TryGetPackagedProtocolUri(Log));
+                    string relaunchArguments = BuildUnelevatedRelaunchArguments(
+                        commandLineArgs,
+                        Environment.ProcessId,
+                        includeStartupFlagWhenMissing: _processStartupLaunchDetected,
+                        packagedProtocolUri);
+                    if (DragDropPermissionService.TryRelaunchAsExplorerUser(relaunchArguments))
+                    {
+                        Log(
+                            $"[Elevation] Pre-mutex launch relaunched unelevated " +
+                            $"(startup={_processStartupLaunchDetected}); exiting elevated instance");
+                        _startupSessionLedger?.MarkCleanExit();
+                        DrainLogQueue();
+                        Environment.Exit(0);
+                    }
+
+                    Log("[Elevation] Pre-mutex unelevated relaunch failed; continuing elevated");
+                }
+                else
+                {
+                    Log(
+                        "[Elevation] Pre-mutex unelevated relaunch skipped " +
+                        $"(canRelaunch={_startupElevationAssessment.CanRelaunchUnelevated}, " +
+                        $"alreadyRelaunched={alreadyRelaunchedForElevation}, " +
+                        $"notification={notificationLaunch}, " +
+                        $"harness={automatedHarnessLaunch}); continuing elevated");
+                }
+            }
+        }
+
+        _activationEvent = SingleInstanceAndActivationInterop.CreateOrOpenActivationEvent(
+            DeskBoxDataPathService.Current.ActivationEventName,
+            Log);
+        (_singleInstanceMutex, bool createdNew) = SingleInstanceAndActivationInterop.CreateOrOpenSingleInstanceMutex(
             DeskBoxDataPathService.Current.SingleInstanceMutexName,
-            out bool createdNew);
+            Log);
+        bool isUnattendedChannelLaunch =
+            _processStartupLaunchDetected || notificationLaunch || IsAutomatedProbeOrSmokeLaunch(commandLineArgs);
+        if (!createdNew &&
+            TryHandleCrossChannelCollision(
+                isUnattendedChannelLaunch,
+                out Mutex? handedOffMutex))
+        {
+            _singleInstanceMutex = handedOffMutex;
+            createdNew = true;
+        }
+
         if (createdNew)
         {
+            InitializePrimaryChannelOwnershipAndMigration(
+                isInteractiveLaunch: !isUnattendedChannelLaunch);
             // The launch breadcrumb is written before anything can exit so a
             // death anywhere in this launch is attributable on the next one.
             _startupSessionLedger = new StartupSessionLedger(
@@ -362,8 +607,6 @@ public partial class App : Application
             }
         }
 
-        bool notificationLaunch = NativeNotificationActivationBootstrap.IsNotificationLaunch(
-            Environment.GetCommandLineArgs());
         if (createdNew || notificationLaunch)
         {
             s_startupLaunchQuietExit = _processStartupLaunchDetected || notificationLaunch;
@@ -377,7 +620,8 @@ public partial class App : Application
         {
             string? jumpListArg = nativeNotificationActivation is null &&
                 !_processStartupLaunchDetected
-                    ? JumpListService.TryGetJumpListArgument(
+                    ? JumpListService.TryGetJumpListArgument(TryGetPackagedLaunchArguments()) ??
+                      JumpListService.TryGetJumpListArgument(
                         string.Join(' ', Environment.GetCommandLineArgs()))
                     : null;
             string activationKind = nativeNotificationActivation is not null
@@ -390,7 +634,7 @@ public partial class App : Application
             Log(
                 $"[Activation] Secondary instance kind={activationKind} " +
                 $"argumentCount={Math.Max(0, Environment.GetCommandLineArgs().Length - 1)} " +
-                $"{GetParentProcessReport()}");
+                $"{(EnableStartupProcessSnapshotDiagnostics ? GetParentProcessReport() : "parent=skipped")}");
 
             if (nativeNotificationActivation is not null)
             {
@@ -413,6 +657,7 @@ public partial class App : Application
             else if (_processStartupLaunchDetected)
             {
                 Log("Another instance running; startup launch exiting silently");
+                DrainLogQueue();
                 Environment.Exit(0);
             }
             else
@@ -422,13 +667,21 @@ public partial class App : Application
                     StorePendingJumpListArgument(jumpListArg);
                 }
 
+                string? protocolUri = DeskBoxProtocolActivationService.TryExtractProtocolUri(
+                    commandLineArgs,
+                    SingleInstanceAndActivationInterop.TryGetPackagedProtocolUri(Log) ?? TryGetPackagedLaunchArguments());
+                if (!string.IsNullOrWhiteSpace(protocolUri))
+                {
+                    DeskBoxProtocolActivationService.StorePendingProtocolUri(protocolUri);
+                    Log($"[Protocol] Forwarded deskbox:// URI to running instance uri={protocolUri}");
+                }
+
                 // The updater restarts the app with the update-result
                 // argument after a failed install; when this secondary
                 // launch races a still-living primary, forward the outcome
                 // the same way instead of dropping it (the dialog would
                 // otherwise never appear anywhere).
-                string? pendingUpdateResult = TryGetUpdateInstallOutcome(
-                    Environment.GetCommandLineArgs());
+                string? pendingUpdateResult = TryGetUpdateInstallOutcome(commandLineArgs);
                 if (!string.IsNullOrWhiteSpace(pendingUpdateResult))
                 {
                     StorePendingUpdateInstallResult(pendingUpdateResult);
@@ -438,7 +691,7 @@ public partial class App : Application
             Log("Another instance running, signaling existing instance");
             try
             {
-                _activationEvent.Set();
+                _activationEvent?.Set();
             }
             catch (Exception ex)
             {
@@ -450,101 +703,42 @@ public partial class App : Application
             Environment.Exit(0);
         }
 
-        // Elevation gate: an elevated DeskBox cannot receive OLE drops from
-        // Explorer (UIPI) and cannot start XAML drags either, so an elevated
-        // launch either relaunches itself unelevated or surfaces a notice.
-        // The mutex stays owned by the kernel on these exits: the replacement
-        // instance waits for this process via --await-parent-exit.
-        _startupElevationAssessment = DragDropPermissionService.AssessStartupElevation();
-        if (_startupElevationAssessment.IsCurrentProcessElevated)
-        {
-            Log(
-                $"[Elevation] Elevated launch detected " +
-                $"uacDisabled={_startupElevationAssessment.IsUacDisabled} " +
-                $"explorerElevated={_startupElevationAssessment.IsExplorerElevated} " +
-                $"canRelaunch={_startupElevationAssessment.CanRelaunchUnelevated} " +
-                $"mismatch={_startupElevationAssessment.Mismatch}");
-            if (_processStartupLaunchDetected)
-            {
-                // Nobody is watching an unattended launch: fix the cause and
-                // relaunch unelevated instead of parking a dialog. A failed
-                // relaunch keeps this instance running (drag-drop degraded).
-                _ = DragDropPermissionService.ClearElevationCompatibilityFlags();
-
-                // Two loop breakers: only relaunch when Explorer really offers
-                // a standard-user context, and never twice in a row — a
-                // relaunch that lands elevated again (elevated Explorer, or
-                // the ShellExecute fallback spawning an elevated child) must
-                // not restart forever on an unattended desktop.
-                bool alreadyRelaunchedForElevation =
-                    TryGetAwaitParentExitProcessId(Environment.GetCommandLineArgs()) is not null;
-                if (_startupElevationAssessment.CanRelaunchUnelevated &&
-                    !alreadyRelaunchedForElevation)
-                {
-                    string relaunchArguments =
-                        $"{AwaitParentExitArgument} {Environment.ProcessId} --startup";
-                    if (DragDropPermissionService.TryRelaunchAsExplorerUser(relaunchArguments))
-                    {
-                        Log("[Elevation] Unattended launch relaunched unelevated; exiting elevated instance");
-                        _startupSessionLedger?.MarkCleanExit();
-                        _nativeNotificationService?.Dispose();
-                        DrainLogQueue();
-                        Environment.Exit(0);
-                    }
-
-                    Log("[Elevation] Unattended relaunch failed; continuing elevated");
-                }
-                else
-                {
-                    Log(
-                        "[Elevation] Unattended relaunch skipped " +
-                        $"(canRelaunch={_startupElevationAssessment.CanRelaunchUnelevated}, " +
-                        $"alreadyRelaunched={alreadyRelaunchedForElevation}); continuing elevated");
-                }
-            }
-            // Interactive launches defer the notice to OnLaunched, once the
-            // tray exists and the startup pipeline is no longer watching.
-        }
-
         InitializeComponent();
 
-        // Build DI container and resolve core services
-        var serviceCollection = new ServiceCollection();
-        serviceCollection.AddDeskBoxServices();
-        Services = serviceCollection.BuildServiceProvider();
-
-        SettingsService = Services.GetRequiredService<SettingsService>();
+        Services = ServiceRegistry.CreateContainer();
+        SettingsService = Services.SettingsService;
+        WidgetTextShadow.SetEnabled(SettingsService.Settings.WidgetShell.WidgetTextShadowEnabled);
+        Views.WidgetEditorPopoverWindow.DefaultCornerPreferenceProvider = () => SettingsService?.Settings.WidgetShell.WidgetCornerPreference;
         SettingsService.PersistenceFailed += OnSettingsPersistenceFailed;
         SettingsService.ExternalSnapshotApplied += OnExternalSettingsSnapshotApplied;
-        DataBackupService = Services.GetRequiredService<DeskBoxDataBackupService>();
-        DataBackupService.AutomaticSnapshotFallbackDetected += OnAutomaticBackupFallbackDetected;
-        // While a wipe-recovery decision is pending, scheduled automatic
-        // snapshots stay paused so the fresh-default profile cannot evict the
-        // pre-wipe snapshots the offer restores from.
-        DataBackupService.SetRecoveryOfferPauseProbe(
-            () => RecoveryOfferStore.TryRead() is not null);
-        // The pending offer's referenced snapshot survives retention pruning
-        // (without consuming a slot) so manual backups during the pending
-        // window cannot evict the archive the offer restores from.
-        DataBackupService.SetRecoverySnapshotRetentionPin(
-            () => RecoveryOfferStore.TryRead()?.SnapshotPath);
-        CloudBackupService = Services.GetRequiredService<CloudBackupService>();
-        CloudBackupService.BackupRunCompleted += OnCloudBackupRunCompleted;
-        _ = LegacySearchIndexCleanupService.TryCleanup();
-        AttachmentHealthService = Services.GetRequiredService<DeskBoxAttachmentHealthService>();
-        DiagnosticsBundleService = Services.GetRequiredService<DeskBoxDiagnosticsBundleService>();
-        FileService = Services.GetRequiredService<FileService>();
-        OrganizerService = Services.GetRequiredService<OrganizerService>();
-        ManagedStorageDesktopShortcutService =
-            Services.GetRequiredService<ManagedStorageDesktopShortcutService>();
-        AppUpdateService = Services.GetRequiredService<IAppUpdateService>();
-        QuickCaptureService = Services.GetRequiredService<QuickCaptureService>();
-        ResizeGuideOverlay = Services.GetRequiredService<ResizeGuideOverlayService>();
 
         StartupService.Configure(StartupServiceFactory.Create(DistributionService, SettingsService));
-        AppUpdateService.CheckCompleted += OnUpdateCheckCompleted;
         UnhandledException += OnUnhandledException;
         Log($"Distribution channel={DistributionService.ChannelName} packaged={DistributionService.IsPackaged}");
+
+        string? coldStartProtocolUri = DeskBoxProtocolActivationService.TryExtractProtocolUri(
+            commandLineArgs,
+            SingleInstanceAndActivationInterop.TryGetPackagedProtocolUri(Log) ?? TryGetPackagedLaunchArguments());
+        if (!string.IsNullOrWhiteSpace(coldStartProtocolUri) &&
+            (!DeskBoxProtocolActivationService.TryParseProtocolUri(coldStartProtocolUri, out DeskBoxProtocolIntent? parsedIntent, out _) ||
+             parsedIntent?.Action != DeskBoxProtocolAction.BackgroundStartup))
+        {
+            DeskBoxProtocolActivationService.StorePendingProtocolUri(coldStartProtocolUri);
+        }
+    }
+
+    private DeskBoxDataBackupService ConfigureDataBackupService(DeskBoxDataBackupService service)
+    {
+        service.AutomaticSnapshotFallbackDetected += OnAutomaticBackupFallbackDetected;
+        service.SetRecoveryOfferPauseProbe(() => RecoveryOfferStore.TryRead() is not null);
+        service.SetRecoverySnapshotRetentionPin(() => RecoveryOfferStore.TryRead()?.SnapshotPath);
+        return service;
+    }
+
+    private CloudBackupService ConfigureCloudBackupService(CloudBackupService service)
+    {
+        service.BackupRunCompleted += OnCloudBackupRunCompleted;
+        return service;
     }
 
     private static string GetProcessIntegrityReport()
@@ -835,7 +1029,9 @@ public partial class App : Application
         }
 
         Win32Helper.GetWindowThreadProcessId(hwnd, out uint processId);
-        if (processId == (uint)Environment.ProcessId)
+        if (processId == (uint)Environment.ProcessId ||
+            BelongsToSettingsHostProcess(processId) ||
+            BelongsToStudioHostProcess(processId))
         {
             return true;
         }
@@ -846,12 +1042,17 @@ public partial class App : Application
             rootHwnd = hwnd;
         }
 
-        if (_trayWindow is not null && rootHwnd == WindowNative.GetWindowHandle(_trayWindow))
+        if (TrayHostWindowHandle != IntPtr.Zero && rootHwnd == TrayHostWindowHandle)
         {
             return true;
         }
 
-        if (_settingsWindow is not null && rootHwnd == WindowNative.GetWindowHandle(_settingsWindow))
+        if (GetVisibleSettingsWindowHandle() is var visibleSettingsHwnd && visibleSettingsHwnd != IntPtr.Zero && rootHwnd == visibleSettingsHwnd)
+        {
+            return true;
+        }
+
+        if (GetStudioHostWindowHandle() is var studioHostHwnd && studioHostHwnd != IntPtr.Zero && rootHwnd == studioHostHwnd)
         {
             return true;
         }
@@ -864,11 +1065,15 @@ public partial class App : Application
         return WidgetManager?.IsWidgetWindow(rootHwnd) == true;
     }
 
+    internal bool IsDeskBoxOrTextInputExperienceWindow(IntPtr hwnd) =>
+        IsDeskBoxWindow(hwnd) ||
+        DeskBox.Helpers.TransientInputFocusGuard.IsWindowsTextInputExperienceWindow(hwnd);
+
     public static void Log(string msg)
     {
         try
         {
-            string line = $"[{DateTime.Now:HH:mm:ss.fff}] {msg}{Environment.NewLine}";
+            string line = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] {msg}{Environment.NewLine}";
             if (Interlocked.Increment(ref s_pendingLogLineCount) > MaxQueuedLogLines)
             {
                 Interlocked.Decrement(ref s_pendingLogLineCount);
@@ -927,7 +1132,7 @@ public partial class App : Application
         }
     }
 
-    private static void DrainLogQueue()
+    internal static void DrainLogQueue()
     {
         var builder = new System.Text.StringBuilder();
         while (s_logQueue.TryDequeue(out string? line))
@@ -945,7 +1150,7 @@ public partial class App : Application
         {
             EnsureLogDirectory();
             TryRotateLogFileIfNeeded();
-            File.AppendAllText(LogPath, builder.ToString());
+            File.AppendAllText(EffectiveLogPath, builder.ToString());
         }
         catch
         {
@@ -956,25 +1161,25 @@ public partial class App : Application
     {
         try
         {
-            if (!File.Exists(LogPath))
+            if (!File.Exists(EffectiveLogPath))
             {
                 return;
             }
 
-            var info = new FileInfo(LogPath);
+            var info = new FileInfo(EffectiveLogPath);
             if (info.Length < MaxLogFileSizeBytes)
             {
                 return;
             }
 
             // Rotate: current → .1, old .1 is deleted
-            string rotatedPath = LogPath + ".1";
+            string rotatedPath = EffectiveLogPath + ".1";
             if (File.Exists(rotatedPath))
             {
                 File.Delete(rotatedPath);
             }
 
-            File.Move(LogPath, rotatedPath);
+            File.Move(EffectiveLogPath, rotatedPath);
         }
         catch
         {
@@ -989,10 +1194,13 @@ public partial class App : Application
             return;
         }
 
-        string? dir = Path.GetDirectoryName(LogPath);
+        string? dir = Path.GetDirectoryName(EffectiveLogPath);
         if (dir is not null)
         {
-            Directory.CreateDirectory(dir);
+            if (string.Equals(Path.GetFileName(Path.TrimEndingDirectorySeparator(dir)), DeskBoxDataPathService.StoreDurableSubdirectoryName, StringComparison.OrdinalIgnoreCase))
+                DeskBox.Platform.StoreUserAssetMigrationFileOps.EnsureHiddenDirectory(dir);
+            else
+                Directory.CreateDirectory(dir);
         }
 
         Volatile.Write(ref s_logDirectoryEnsured, 1);
@@ -1020,6 +1228,24 @@ public partial class App : Application
         {
             Log($"Failed to inspect startup-task activation: {ex.Message}");
             return false;
+        }
+    }
+
+    private static string? TryGetPackagedLaunchArguments()
+    {
+        if (!AppDistributionService.Current.IsPackaged)
+            return null;
+        try
+        {
+            return Windows.ApplicationModel.AppInstance.GetActivatedEventArgs() is
+                Windows.ApplicationModel.Activation.ILaunchActivatedEventArgs launchArgs
+                    ? launchArgs.Arguments
+                    : null;
+        }
+        catch (Exception ex)
+        {
+            Log($"Failed to inspect packaged launch activation: {ex.Message}");
+            return null;
         }
     }
 
@@ -1069,38 +1295,152 @@ public partial class App : Application
         return null;
     }
 
+    internal static bool IsAutomatedProbeOrSmokeLaunch(
+        IReadOnlyList<string> arguments,
+        string? devDataRootOverride = null)
+    {
+#if DESKBOX_PGO_INSTRUMENTATION
+        return true;
+#else
+        string? devDataRoot = devDataRootOverride ??
+            Environment.GetEnvironmentVariable("DESKBOX_DEV_DATA_ROOT");
+        if (!string.IsNullOrWhiteSpace(devDataRoot))
+        {
+            return true;
+        }
+
+        for (int index = 1; index < arguments.Count; index++)
+        {
+            string arg = arguments[index].Trim().Trim('"');
+            if (arg.StartsWith("--aot-", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+#endif
+    }
+
+    internal static string BuildUnelevatedRelaunchArguments(
+        IReadOnlyList<string> commandLineArgs,
+        int currentProcessId,
+        bool includeStartupFlagWhenMissing,
+        string? packagedProtocolUri = null)
+    {
+        var tokens = new List<string>
+        {
+            AwaitParentExitArgument,
+            currentProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture)
+        };
+
+        bool hasStartupFlag = false;
+        bool hasProtocolUri = false;
+        string inlineAwaitPrefix = AwaitParentExitArgument + "=";
+        for (int index = 1; index < commandLineArgs.Count; index++)
+        {
+            string raw = commandLineArgs[index];
+            string trimmed = raw.Trim().Trim('"');
+            if (trimmed.Length == 0)
+            {
+                continue;
+            }
+
+            if (string.Equals(trimmed, AwaitParentExitArgument, StringComparison.OrdinalIgnoreCase))
+            {
+                if (index + 1 < commandLineArgs.Count &&
+                    int.TryParse(commandLineArgs[index + 1].Trim().Trim('"'), out _))
+                {
+                    index++;
+                }
+
+                continue;
+            }
+
+            if (trimmed.StartsWith(inlineAwaitPrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (string.Equals(trimmed, "--startup", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(trimmed, "-startup", StringComparison.OrdinalIgnoreCase))
+            {
+                hasStartupFlag = true;
+            }
+            else if (trimmed.StartsWith("deskbox://", StringComparison.OrdinalIgnoreCase))
+            {
+                hasProtocolUri = true;
+            }
+
+            tokens.Add(QuoteCommandLineTokenIfNeeded(raw));
+        }
+
+        if (!hasProtocolUri)
+        {
+            string? resolvedProtocol = !string.IsNullOrWhiteSpace(packagedProtocolUri)
+                ? packagedProtocolUri.Trim()
+                : SingleInstanceAndActivationInterop.TryGetPackagedProtocolUri();
+            if (!string.IsNullOrWhiteSpace(resolvedProtocol) &&
+                resolvedProtocol.StartsWith("deskbox://", StringComparison.OrdinalIgnoreCase))
+            {
+                tokens.Add(QuoteCommandLineTokenIfNeeded(resolvedProtocol));
+            }
+        }
+
+        if (includeStartupFlagWhenMissing && !hasStartupFlag)
+        {
+            tokens.Add("--startup");
+        }
+
+        return string.Join(' ', tokens);
+    }
+
+    private static string QuoteCommandLineTokenIfNeeded(string token)
+    {
+        if (token.Length >= 2 && token[0] == '"' && token[^1] == '"')
+        {
+            return token;
+        }
+
+        if (token.IndexOfAny([' ', '\t', '"']) < 0)
+        {
+            return token;
+        }
+
+        return $"\"{token.Replace("\"", "\\\"", StringComparison.Ordinal)}\"";
+    }
+
     private static void WaitForRelaunchParentExit(IReadOnlyList<string> arguments)
     {
-        if (TryGetAwaitParentExitProcessId(arguments) is not int parentProcessId)
+        if ((TryGetAwaitParentExitProcessId(arguments) ?? DragDropPermissionService.TryConsumeAwaitParentExitFallbackMarker()) is not int parentProcessId)
         {
             return;
         }
 
-        try
+        Log($"[Elevation] Relaunched unelevated; waiting for elevated pid={parentProcessId} to exit");
+        DeskBox.Platform.DragDropPermissionNativeMethods.CrossIntegrityProcessWaitOutcome outcome =
+            DeskBox.Platform.DragDropPermissionNativeMethods.WaitForProcessExitLimited(
+                parentProcessId,
+                AwaitParentExitTimeoutMs,
+                out int lastWin32Error);
+        switch (outcome)
         {
-            using Process parent = Process.GetProcessById(parentProcessId);
-            Log($"[Elevation] Relaunched unelevated; waiting for elevated pid={parentProcessId} to exit");
-            if (!parent.WaitForExit(AwaitParentExitTimeoutMs))
-            {
-                Log($"[Elevation] Timed out waiting for pid={parentProcessId}; continuing startup");
-            }
-            else
-            {
+            case DeskBox.Platform.DragDropPermissionNativeMethods.CrossIntegrityProcessWaitOutcome.AlreadyExited:
+                Log($"[Elevation] Elevated pid={parentProcessId} already exited");
+                break;
+            case DeskBox.Platform.DragDropPermissionNativeMethods.CrossIntegrityProcessWaitOutcome.ExitedWithinTimeout:
                 Log($"[Elevation] Elevated pid={parentProcessId} exited; proceeding with single-instance claim");
-            }
-        }
-        catch (ArgumentException)
-        {
-            // The elevated instance already exited before we could look at it.
-            Log($"[Elevation] Elevated pid={parentProcessId} already exited");
-        }
-        catch (Exception ex)
-        {
-            Log($"[Elevation] Parent wait failed for pid={parentProcessId}: {ex.Message}");
+                break;
+            case DeskBox.Platform.DragDropPermissionNativeMethods.CrossIntegrityProcessWaitOutcome.TimedOut:
+                Log($"[Elevation] Timed out waiting for pid={parentProcessId}; continuing startup");
+                break;
+            default:
+                Log($"[Elevation] Parent wait failed for pid={parentProcessId} win32Error={lastWin32Error}; continuing startup");
+                break;
         }
     }
 
-    private static string? NormalizeUpdateInstallOutcome(string? outcome)
+    internal static string? NormalizeUpdateInstallOutcome(string? outcome)
     {
         return outcome?.Trim().Trim('"').ToLowerInvariant() switch
         {
@@ -1120,28 +1460,36 @@ public partial class App : Application
             return;
         }
 
-        // Warm the native context-menu server in the background once startup
-        // work settles, so the first right-click in a widget does not pay the
-        // cold Shell handler-loading cost.
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                await Task.Delay(TimeSpan.FromSeconds(5));
-                ShellContextMenuProxy.Prewarm();
-            }
-            catch (Exception ex)
-            {
-                Log($"[ShellContextMenu] Prewarm failed: {ex.Message}");
-            }
-        });
+        // Defer spawning deskbox-thumbnail-proxy.exe --context-menu-server until
+        // the user actually invokes a native right-click context menu (ShowAsync)
+        // or toggles the setting on, avoiding an idle child process at startup.
+        LogVerbose("[ShellContextMenu] Deferred startup prewarm until right-click invocation");
+    }
+
+    private static string DescribeRuntimeBuildConfiguration()
+    {
+#if DESKBOX_NATIVE_AOT
+        return "NativeAOT";
+#elif DEBUG
+        return "JIT-Debug (+150-250MB JIT/TieredCompilation overhead; use publish-aot-retail for retail memory)";
+#else
+        return System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeCompiled
+            ? "JIT-Release"
+            : "NativeAOT";
+#endif
     }
 
     protected override async void OnLaunched(LaunchActivatedEventArgs args)
     {
+        DeskBox.Helpers.ImeCompositionGuard.EnsureGlobalFocusTracking();
         if (IsSettingsHost)
         {
             LaunchSettingsHostAsync();
+            return;
+        }
+        if (IsStudioHost)
+        {
+            LaunchStudioHostAsync();
             return;
         }
 
@@ -1151,9 +1499,11 @@ public partial class App : Application
             return;
         }
         _isLaunched = true;
+        DesktopToastHudService.Shared.ConfigureOpenSettings(ShowSettings, () => ThemeService?.EffectiveTheme);
+        ConfigureCustomWidgetHostActionBridge();
 
         bool startupTaskActivation = IsStartupTaskActivation();
-        bool isStartupLaunch = StartupLaunchPolicy.IsStartupLaunch(
+        bool isStartupLaunch = _processStartupLaunchDetected || StartupLaunchPolicy.IsStartupLaunch(
             Environment.GetCommandLineArgs(),
             args.Arguments,
             startupTaskActivation);
@@ -1166,6 +1516,7 @@ public partial class App : Application
             "App.OnLaunched",
             $"startup={isStartupLaunch}");
         Log("OnLaunched start");
+        Log($"[Startup] Runtime build mode: {DescribeRuntimeBuildConfiguration()}");
         // Armed before the try: a startup that stalls (rather than throwing)
         // would otherwise hold the single-instance mutex with no UI at all.
         StartStartupWatchdog();
@@ -1173,12 +1524,13 @@ public partial class App : Application
         try
         {
             string? updateInstallOutcome = TryGetUpdateInstallOutcome(Environment.GetCommandLineArgs());
-            IsStartupMode = _processStartupLaunchDetected || isStartupLaunch;
+            IsStartupMode = isStartupLaunch;
             RunCriticalStartupStep("dispatcher-init", () =>
             {
                 UiDispatcherQueue = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
                 DeskBox.Platform.UiDispatch.MarkReady(UiDispatcherQueue);
                 WidgetSegmentedLayoutHelper.Initialize(UiDispatcherQueue);
+                EnsureXamlLoopLifelineIfNoOtherWindows();
             });
 
             // The diagnostic report walks a snapshot of every process on the
@@ -1189,10 +1541,17 @@ public partial class App : Application
             {
                 try
                 {
+                    _ = LegacySearchIndexCleanupService.TryCleanup();
+                    ProcessEnvironmentSyncService.RefreshProcessEnvironmentFromRegistry("startup");
                     Log($"Process integrity {GetProcessIntegrityReport()} pid={Environment.ProcessId} processPath={Environment.ProcessPath ?? "unknown"} baseDir={AppContext.BaseDirectory}");
-                    Log($"Process parent {GetParentProcessReport()} commandLine={Environment.CommandLine}");
+                    Log($"Process parent {(EnableStartupProcessSnapshotDiagnostics ? GetParentProcessReport() : "parent=skipped")} commandLine={Environment.CommandLine}");
                     Log($"UAC {GetUacPolicyReport()}");
                     Log($"AppCompat {GetAppCompatReport()}");
+                    if (!DistributionService.IsPackaged &&
+                        Environment.ProcessPath is { Length: > 0 } currentExePath)
+                    {
+                        DeskBox.Platform.CustomWidgetStorageFileOps.TryEnsureDeskBoxProtocolRegistered(currentExePath);
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -1219,14 +1578,6 @@ public partial class App : Application
                 DeskBoxDataPathService.Current.DataDirectory,
                 "settings.json"));
 
-            // Capture the previous session's data before any startup normalization
-            // writes. Settings are not loaded yet, so the backup schedule and folder
-            // are read from the raw settings file; unreadable values fall back to
-            // the defaults, matching the pre-setting behavior.
-            RunOptionalStartupStep("read-backup-options", () =>
-                DataBackupService.UpdateAutomaticBackupOptions(
-                    DataBackupSettingsPolicy.ReadStartupOptions(
-                        Path.Combine(DeskBoxDataPathService.Current.DataDirectory, "settings.json"))));
             _backupRuntime = new BackupRuntime(
                 new BackupBackend(SettingsService, DataBackupService, CloudBackupService),
                 new DispatcherBackupTimer(UiDispatcherQueue),
@@ -1282,41 +1633,48 @@ public partial class App : Application
                 () => SettingsService.LoadAsync());
             bool skipStartupAutomaticSnapshot = PostRestoreRecoveryPolicy
                 .ShouldSkipStartupScheduledSnapshot(restoreResult.Kind, restoreResult.Succeeded);
+            var startupSnapshotMetadataPinned = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             Task startupAutomaticSnapshotTask = RunOptionalStartupStepAsync(
                 "automatic-snapshot",
                 async () =>
                 {
-                    if (skipStartupAutomaticSnapshot)
+                    try
                     {
-                        Log("[DataBackup] Skipped the startup automatic snapshot on the restore launch; " +
-                            "the pre-restore safety archive already covers this state.");
-                        return;
-                    }
+                        if (skipStartupAutomaticSnapshot)
+                        {
+                            Log("[DataBackup] Skipped the startup automatic snapshot on the restore launch; " +
+                                "the pre-restore safety archive already covers this state.");
+                            return;
+                        }
 
-                    // A defaults launch (missing settings, or settings that
-                    // failed to load) with surviving recovery snapshots is the
-                    // wipe signature: snapshotting now archives the defaults
-                    // this session created, pollutes the candidate pool and
-                    // starts evicting the pre-wipe snapshots the offer exists
-                    // to serve. The recovery marker is written later in the
-                    // pipeline, so the service-level pause cannot cover this
-                    // first snapshot; later launches pause through the probe.
-                    await settingsLoadTask;
-                    if (IsWipeRecoveryEligible &&
-                        (SettingsService.LastLoadRecoveryState
-                            is SettingsLoadRecoveryState.DefaultsForMissingFile
-                            or SettingsLoadRecoveryState.DefaultsAfterFailure) &&
-                        await DataBackupService.HasRecoverySnapshotNotAfterAsync(_startupProcessStartUtc))
+                        // A defaults launch (missing settings, or settings that failed to load) with
+                        // surviving recovery snapshots is the wipe signature: skip archiving defaults.
+                        await settingsLoadTask;
+                        _backupRuntime.RefreshOptions();
+                        if (IsWipeRecoveryEligible &&
+                            (SettingsService.LastLoadRecoveryState
+                                is SettingsLoadRecoveryState.DefaultsForMissingFile
+                                or SettingsLoadRecoveryState.DefaultsAfterFailure) &&
+                            await DataBackupService.HasRecoverySnapshotNotAfterAsync(_startupProcessStartUtc))
+                        {
+                            Log("[DataBackup] Skipped the startup automatic snapshot: settings started from " +
+                                $"defaults ({SettingsService.LastLoadRecoveryState}) but pre-existing recovery " +
+                                "snapshots survive; keeping the recovery offer's candidate pool clean.");
+                            return;
+                        }
+
+                        await DataBackupService.CaptureStartupMetadataPinIfDueAsync();
+                        startupSnapshotMetadataPinned.TrySetResult();
+                        await _backupRuntime.RunScheduledLocalAsync();
+                    }
+                    finally
                     {
-                        Log("[DataBackup] Skipped the startup automatic snapshot: settings started from " +
-                            $"defaults ({SettingsService.LastLoadRecoveryState}) but pre-existing recovery " +
-                            "snapshots survive; keeping the recovery offer's candidate pool clean.");
-                        return;
+                        startupSnapshotMetadataPinned.TrySetResult();
+                        _dataBackupService?.ClearStartupMetadataPin();
                     }
-
-                    await _backupRuntime.RunScheduledLocalAsync();
                 });
             await settingsLoadTask;
+            WidgetTextShadow.SetEnabled(SettingsService.Settings.WidgetShell.WidgetTextShadowEnabled);
             // Runs only on the launch that applied a full restore, before the
             // backup options refresh below so a rebased snapshot folder is the
             // one this session uses. The await is accepted because restore
@@ -1327,6 +1685,7 @@ public partial class App : Application
                 async () => postRestoreRecovery = await RecoverMachineLocalStateAfterRestoreAsync(restoreResult));
             RefreshAutomaticBackupOptionsFromSettings();
             SettingsService.SettingsChanged += OnBackupSettingsChanged;
+            SettingsService.SettingsChanged += OnClipboardFeatureSettingsChanged;
             SettingsService.SettingsChanged += OnMaterialCapabilitySettingsChanged;
             RunOptionalStartupStep("automatic-backup-timer", StartAutomaticBackupTimer);
             string requestedCornerPreference = SettingsService.Settings.WidgetCornerPreference;
@@ -1338,18 +1697,24 @@ public partial class App : Application
                 $"requested corners={requestedCornerPreference}, " +
                 $"effective corners={effectiveCornerPreference}");
 
-            // Sync widget move/resize snap settings.
+            // Sync widget move/resize snap settings when already materialized;
+            // otherwise ResizeGuideOverlay applies them lazily on first access.
             RunOptionalStartupStep("resize-guide-settings", () =>
             {
-                ResizeGuideOverlay.IsSnapEnabled = SettingsService.Settings.ResizeSnapEnabled;
-                ResizeGuideOverlay.SnapSpacingDips = SettingsService.Settings.WidgetSnapSpacing;
+                if (_resizeGuideOverlay is { } overlay)
+                {
+                    SyncResizeGuideOverlayFromSettings(overlay);
+                }
             });
 
             // Phase 2: Initialize services that depend on settings (parallel)
             RunCriticalStartupStep("core-services", () =>
             {
-                ThemeService = Services.GetRequiredService<ThemeService>();
-                LocalizationService = Services.GetRequiredService<LocalizationService>();
+#if !DESKBOX_AOT_SMOKE_HARNESS && !DESKBOX_STORE
+                LocalizationService.EnableResidentHostKeyFilter();
+#endif
+                ThemeService = Services.ThemeService;
+                LocalizationService = Services.LocalizationService;
                 LocalizationService.LanguageChanged += OnLanguageChanged;
             });
 
@@ -1375,18 +1740,18 @@ public partial class App : Application
                 () => EnsureSearchServicesForUserAction()?.EverythingProvider,
                 () => _searchHotkeyService,
                 enabled => _searchEngineService?.SetDeskBoxContentSearchEnabled(enabled),
-                (enabled, reveal) => WidgetManager is { } manager
-                    ? manager.ApplySearchWindowStateAsync(enabled, reveal)
-                    : SettingsService.SaveAsync(),
-                SetSearchFeatureEnabled,
                 action => UiDispatcherQueue.TryEnqueue(() => action()),
-                ex => Log($"[Search] Feature enablement failed: {ex}"));
+                ex => Log($"[Search] Settings operation failed: {ex}"));
             // The App-owned search start/stop chain, formalized as the
             // search feature's runtime lease. The settings coordinator's
             // enable callback and the shutdown step both go through this
             // adapter; ad-hoc ensures stay on the idempotent chain below.
             _searchFeatureRuntime = _featureRuntimes.Register(SearchFeatureRuntimeId,
-                new SearchFeatureRuntime(EnsureSearchServices, DisposeSearchServices));
+                new SearchFeatureRuntime(EnsureSearchFeatureShell, DisposeSearchServices));
+            _clipboardFeatureRuntime = _featureRuntimes.Register(ClipboardFeatureRuntimeId,
+                new ClipboardFeatureRuntime(
+                    StartClipboardFeatureMonitoring,
+                    StopClipboardFeatureMonitoringAsync));
             // One restore-actions owner for the process: the settings editor
             // borrows it for delete/download/restore, and the remote list
             // reads route through the same registration, endpoint freeze and
@@ -1407,23 +1772,19 @@ public partial class App : Application
             _managedStorageSettings = new ManagedStorageSettingsCoordinator(SettingsService);
             _maintenanceSettings = new MaintenanceSettingsCoordinator(SettingsService);
             _performanceSettings = new PerformanceSettingsCoordinator(SettingsService);
-            _quickCaptureClipboardRuntime = _featureRuntimes.Register(QuickCaptureFeatureRuntimeId,
-                new QuickCaptureClipboardRuntime(
-                    () => !IsShuttingDown &&
-                        FeatureWidgetSettings.IsEnabled(SettingsService.Settings, WidgetKind.QuickCapture) &&
-                        SettingsService.Settings.QuickCapture.QuickCaptureClipboardEnabled,
-                    () => new QuickCaptureClipboardService(SettingsService, QuickCaptureService),
-                    ex => Log($"[QuickCaptureClipboard] Stop failed: {ex}")));
             _quickCaptureSettings = new QuickCaptureSettingsCoordinator(
-                SettingsService, _quickCaptureClipboardRuntime,
+                SettingsService,
                 (enabled, reveal) => WidgetManager is { } manager
                     ? manager.ApplyQuickCaptureWindowStateAsync(enabled, reveal)
                     : SettingsService.SaveAsync(),
                 action => UiDispatcherQueue.TryEnqueue(() => action()),
-                ex => Log($"[QuickCapture] Settings operation failed: {ex}"),
-                (limit, token) => QuickCaptureService.TrimRecentItemsAsync(limit, token));
+                ex => Log($"[QuickCapture] Settings operation failed: {ex}"));
 
             var quickCaptureService = QuickCaptureService;
+            _quickCaptureMirrorService ??= new QuickCaptureMarkdownMirrorService(quickCaptureService);
+            await RunOptionalStartupStepAsync(
+                "quick-capture-recent-migration",
+                () => quickCaptureService.MigrateLegacyRecentItemsToClipboardAsync());
             var themeService = ThemeService;
             var localizationService = LocalizationService;
 
@@ -1439,7 +1800,6 @@ public partial class App : Application
                     themeService.RefreshAppearance();
                     return Task.CompletedTask;
                 }));
-            RunOptionalStartupStep("quick-capture-clipboard", () => RefreshQuickCaptureClipboardService());
 
             // Parallel: independent UI setup. The tray is the lifeline: once its
             // icon is up the user can act on the process again.
@@ -1449,27 +1809,24 @@ public partial class App : Application
 
             await themeTask;
 
-            if (FeatureWidgetSettings.IsEnabled(SettingsService.Settings, WidgetKind.Search))
-            {
-                // The search shell is lightweight. Everything owns the filename index;
-                // DeskBox does not scan, preload, or watch the filesystem at startup.
-                RunOptionalStartupStep("search-shell", EnsureSearchServices);
-            }
-            else
-            {
-                Log("[Search] Feature disabled; search services were not initialized");
-            }
+            // The search shell is lightweight. Everything owns the filename index;
+            // DeskBox does not scan, preload, or watch the filesystem at startup.
+            RunOptionalStartupStep("search-shell", () => _ = _searchFeatureRuntime?.StartAsync());
 
             RunCriticalStartupStep("widget-manager", () =>
             {
                 WidgetManager = new WidgetManager(SettingsService, FileService, OrganizerService,
                     themeService, quickCaptureService, localizationService, _todoSettings,
-                    _quickCaptureSettings, _searchSettings);
+                    _quickCaptureSettings);
                 WidgetManager.TrayLayerStateChanged += UpdateTrayLayerStateText;
                 // Lets a quick-reveal raise promote already-open DeskBox surfaces
                 // (search popup, settings, desktop organization) above the raised
                 // widget group; the reverse order is handled per-window at show.
                 WidgetManager.AuxiliaryWindowProvider = GetRaisedBandAuxiliaryWindowHandles;
+                WidgetManager.ClipboardHistoryServiceProvider = () => _clipboardHistoryService;
+                WidgetManager.ResolveStudioAgentUpsertTargetWidgetId = TryGetStudioTargetWidgetIdForAgentUpsert;
+                WidgetManager.NotifyStudioAgentWidgetUpserted = NotifyCustomWidgetStudioAgentUpsert;
+                WidgetManager.PostManagedStorageMigrationCommitAsync = SyncManagedStorageHostEntriesAfterMigrationAsync;
             });
             MarkStartupProgress();
             // Non-null past this point: the critical step above rethrows on
@@ -1479,7 +1836,8 @@ public partial class App : Application
             {
                 DesktopDoubleClickActivationService = new DesktopDoubleClickActivationService(
                     SettingsService,
-                    ToggleWidgetsFromDesktopDoubleClickAsync);
+                    ToggleWidgetsFromDesktopDoubleClickAsync,
+                    pt => WidgetManager?.NotifyPotentialDynamicDesktopClick(pt, alreadyVerifiedBlank: true));
                 DesktopDoubleClickActivationService.RefreshRegistration();
             });
             RunOptionalStartupStep("display-topology-coordinator", () =>
@@ -1488,13 +1846,19 @@ public partial class App : Application
                     UiDispatcherQueue,
                     DisplayAreaWatcherService.CaptureCurrentSignature,
                     async (generation, reasons) =>
-                        WidgetManager is null ||
-                        await WidgetManager.RestoreWidgetPositionsAsync(generation, reasons));
-                StartTopologyGatePolling();
+                    {
+                        bool restored = WidgetManager is null ||
+                            await WidgetManager.RestoreWidgetPositionsAsync(generation, reasons);
+                        if (restored) _displayTopologyTransitionCoordinator?.Gate.ClearCompletedRemovalGrace();
+                        return restored;
+                    });
+                InitializeTopologyGatePolling();
                 if (WidgetManager is not null)
                 {
                     WidgetManager.EndRemovalGraceByUserAction = EndDisplayRemovalGraceByUserAction;
                     WidgetManager.NotifyScreenHomeChangedAction = NotifyScreenHomeChanged;
+                    WidgetManager.RequestDisplayTopologyRestoreAction = RequestDisplayTopologyRestore;
+                    WidgetManager.EnsureXamlLoopLifelineAction = EnsureXamlLoopLifelineIfNoOtherWindows;
                     WidgetManager.SessionManager.InteractionActiveChanged += () =>
                     {
                         var g = _displayTopologyTransitionCoordinator?.Gate;
@@ -1511,6 +1875,8 @@ public partial class App : Application
                         {
                             g.Open(DisplayTopologyGateReason.UserInteraction);
                         }
+
+                        UpdateTopologyGatePollingTimerState();
                     };
                 }
             });
@@ -1521,9 +1887,31 @@ public partial class App : Application
                 "display-startup-settling",
                 WaitForStartupDisplaySettlingAsync);
 
-            // Phase 3: Restore widgets (the startup snapshot must finish
-            // before the restoration phase starts writing normalized state).
-            await startupAutomaticSnapshotTask;
+            RunOptionalStartupStep("display-area-watcher", () =>
+            {
+                if (_displayAreaWatcher is not null)
+                {
+                    if (TrayHostWindowHandle != IntPtr.Zero)
+                    {
+                        _displayAreaWatcher.AttachToMessageWindow(TrayHostWindowHandle);
+                    }
+                    return;
+                }
+
+                _displayAreaWatcher = new DisplayAreaWatcherService(UiDispatcherQueue);
+                _displayAreaWatcher.DisplaysChanged += OnDisplaysChanged;
+                _displayAreaWatcher.Start();
+                if (TrayHostWindowHandle != IntPtr.Zero)
+                {
+                    _displayAreaWatcher.AttachToMessageWindow(TrayHostWindowHandle);
+                }
+            });
+
+            // Phase 3: Restore widgets (only the millisecond-scale JSON metadata
+            // pin is awaited before restoration writes normalized state; archive
+            // file staging and ZIP compression continue in the background).
+            await startupSnapshotMetadataPinned.Task;
+            _ = startupAutomaticSnapshotTask;
             if (IsShuttingDown) return;
             int recoveredDesktopItems = 0;
             if (SuppressFileMutatingStartup)
@@ -1542,7 +1930,11 @@ public partial class App : Application
                     async () => recoveredDesktopItems = await new DesktopOrganizationTransaction(
                         SettingsService,
                         FileService,
-                        widgetManager: WidgetManager).RecoverPendingAsync());
+                        widgetManager: WidgetManager)
+                    {
+                        AutoOrganizationSuppressions = OrganizerService.AutoOrganizationSuppressions,
+                        DesktopIconPositions = OrganizerService.DesktopIconPositions,
+                    }.RecoverPendingAsync());
                 if (recoveredDesktopItems > 0)
                 {
                     Log($"[DesktopOrganization] Recovered {recoveredDesktopItems} items from an interrupted transaction.");
@@ -1592,12 +1984,17 @@ public partial class App : Application
 
             RunOptionalStartupStep("global-hotkey-service", () => InitializeGlobalHotkeyService(localizationService));
             RunOptionalStartupStep("shell-context-menu-prewarm", ScheduleShellContextMenuPrewarm);
+            RunOptionalStartupStep("tray-context-menu-prewarm", ScheduleTrayContextMenuPrewarm);
             // Settings-host IPC server: must exist before any second-process
             // settings host tries to connect (batch 3c).
             RunOptionalStartupStep("settings-ipc-server", StartSettingsIpcServer);
 
             RunOptionalStartupStep("todo-reminders", () => RefreshTodoReminderService());
             RunOptionalStartupStep("eye-rest", () => HandleEyeRestSettingsReconcile(_eyeRestSettings!.Read()));
+            if (FeatureWidgetSettings.IsEnabled(SettingsService.Settings, WidgetKind.Clipboard))
+            {
+                RunOptionalStartupStep("clipboard-runtime", ReconcileClipboardFeatureRuntime);
+            }
             RunOptionalStartupStep("native-notifications", StartNativeNotificationService);
             await RunOptionalStartupStepAsync(
                 "external-activation-initialization",
@@ -1708,9 +2105,14 @@ public partial class App : Application
                         isInteractiveLaunch: !IsStartupMode,
                         allowDefaultAfterRecoveryFailure: recoveryOfferOutcome == RecoveryOfferOutcome.FreshStart));
             }
-            await RunOptionalStartupStepAsync(
-                "managed-storage-desktop-shortcut",
-                () => ManagedStorageDesktopShortcutService.SyncAsync());
+            if (_managedStorageDesktopShortcutService is not null ||
+                SettingsService.Settings.FileWidget.ManagedStorageDesktopShortcutEnabled ||
+                !string.IsNullOrWhiteSpace(SettingsService.Settings.FileWidget.ManagedStorageDesktopShortcutPath))
+            {
+                await RunOptionalStartupStepAsync(
+                    "managed-storage-desktop-shortcut",
+                    () => ManagedStorageDesktopShortcutService.SyncAsync());
+            }
 
             RunOptionalStartupStep("desktop-auto-organization-watcher", () =>
             {
@@ -1781,14 +2183,22 @@ public partial class App : Application
             RunOptionalStartupStep(
                 "release-notes-after-update",
                 () => ShowReleaseNotesAfterUpdateOnce());
+            RunOptionalStartupStep(
+                "post-channel-migration-notice",
+                ShowPostChannelMigrationNoticeIfNeeded);
 
             RunOptionalStartupStep("background-update-check", ScheduleBackgroundUpdateCheck);
+            RunOptionalStartupStep("background-widget-catalog-sync", ScheduleBackgroundWidgetCatalogSync);
             RunOptionalStartupStep(
                 "update-installer-prune",
                 // Interface-typed property: pruning only exists on the
                 // direct service (the store channel never downloads
                 // installers, so skipping it there is the old no-op).
                 () => (AppUpdateService as Services.AppUpdateService)?.PruneStaleInstallerDirectories());
+            RunOptionalStartupStep(
+                "drop-staging-temp-prune",
+                () => _ = Task.Run(() => Platform.DropStagingFileOps.CleanupStaleDropStagingDirectories(
+                    isStartupSweep: true)));
             RunOptionalStartupStep("diagnostics-service", () =>
             {
                 _diagnosticsService = new AppDiagnosticsService(UiDispatcherQueue);
@@ -1796,26 +2206,45 @@ public partial class App : Application
             });
 
             // Start display area watcher for hot-plug detection
-            RunOptionalStartupStep("display-area-watcher", () =>
+            RunOptionalStartupStep("display-area-watcher-attach", () =>
             {
+                if (_displayAreaWatcher is not null)
+                {
+                    if (TrayHostWindowHandle != IntPtr.Zero)
+                    {
+                        _displayAreaWatcher.AttachToMessageWindow(TrayHostWindowHandle);
+                    }
+                    return;
+                }
+
                 _displayAreaWatcher = new DisplayAreaWatcherService(UiDispatcherQueue);
                 _displayAreaWatcher.DisplaysChanged += OnDisplaysChanged;
                 _displayAreaWatcher.Start();
-                if (_trayWindow is not null)
+                if (TrayHostWindowHandle != IntPtr.Zero)
                 {
                     // The tray window outlives every widget window, so subscribing
                     // there is what retires the fallback poll. This runs after the
                     // recovery watcher's own attach, which is earlier in startup.
                     _displayAreaWatcher.AttachToMessageWindow(
-                        WindowNative.GetWindowHandle(_trayWindow));
+                        TrayHostWindowHandle);
                 }
+            });
+            RunOptionalStartupStep("monitor-occlusion-tracker", () =>
+            {
+                _monitorOcclusionTracker = new MonitorOcclusionTracker(
+                    UiDispatcherQueue,
+                    IsInProcessDeskBoxWindow);
+                _monitorOcclusionTracker.OccludedMonitorsChanged += OnOccludedMonitorsChanged;
+                _monitorOcclusionTracker.Start();
+                WidgetManager?.AttachMonitorOcclusionRefresh(RefreshMonitorOcclusionNow);
+                WidgetManager?.ApplyMonitorOcclusionState(_monitorOcclusionTracker.OccludedMonitors);
             });
             RunOptionalStartupStep("virtual-display-advisor", () =>
                 VirtualDisplayAdvisor.WarnIfPrimaryDisplayIsVirtual(
                     (titleKey, bodyKey) => ShowSettingsNotification(
                         titleKey,
                         bodyKey,
-                        NotificationIcon.Warning)));
+                        TrayBalloonIconKind.Warning)));
             MaterialCapabilityAdvisor.Initialize(OnMaterialCapabilitySettingsChanged);
             RunOptionalStartupStep("material-capability-advisor", () =>
                 MaterialCapabilityAdvisor.WarnIfMaterialDegraded(
@@ -1823,7 +2252,7 @@ public partial class App : Application
                     (titleKey, bodyKey) => ShowSettingsNotification(
                         titleKey,
                         bodyKey,
-                        NotificationIcon.Warning,
+                        TrayBalloonIconKind.Warning,
                         "AppearanceMaterialSettings")));
 
             // Configure taskbar Jump List with quick actions
@@ -1849,9 +2278,8 @@ public partial class App : Application
             {
                 RunOptionalStartupStep("update-install-result", () =>
                 {
-#if DESKBOX_AOT_SMOKE_HARNESS
-                    ShowSettings("About");
-                    _settingsWindow?.QueueUpdateInstallResultDialog(updateInstallOutcome!);
+#if DESKBOX_NATIVE_AOT && DESKBOX_AOT_SMOKE_HARNESS
+                    QueueInProcessUpdateInstallResultForSmoke(updateInstallOutcome!);
 #else
                     // The result rides the spawn (cold) or the connected
                     // pipe (warm) — a bare push after ShowSettings raced the
@@ -1882,14 +2310,14 @@ public partial class App : Application
 #endif
             // Startup registration does not gate the first usable widgets.
             // DirectStartupService serializes migration with user toggle changes.
-            _ = Task.Run(() =>
+            _ = Task.Run(async () =>
             {
                 if (StartupService.Current is DirectStartupService directStartupService)
                 {
                     directStartupService.TryMigrateLegacyRegistration();
                 }
 
-                ApplyDefaultAutoStartOnce();
+                await InitializeAutoStartOnLaunchAsync().ConfigureAwait(false);
             });
 #if DESKBOX_NATIVE_AOT && DESKBOX_AOT_SMOKE_HARNESS
             StartAotShortcutSmokeIfRequested();
@@ -1918,49 +2346,6 @@ public partial class App : Application
     }
 
     /// <summary>
-    /// Applies the one-time autostart default. Runs off the UI thread because
-    /// registering the logon task shells out to schtasks; only the settings
-    /// write returns to the dispatcher. Development data roots (portable runs,
-    /// smoke harnesses) never touch the machine's startup registration.
-    /// </summary>
-    private void ApplyDefaultAutoStartOnce()
-    {
-        try
-        {
-            if (DeskBoxDataPathService.Current.IsDevelopmentRoot ||
-                !AutoStartDefaultPolicy.ShouldApply(SettingsService.Settings))
-            {
-                return;
-            }
-
-            StartupRegistrationState initialState = StartupService.Current.GetState();
-            StartupRegistrationState effective =
-                AutoStartDefaultPolicy.Resolve(StartupService.Current);
-            bool enabled = AutoStartDefaultPolicy.IsEnabledState(effective);
-
-            void Commit()
-            {
-                SettingsService.Settings.AutoStart = enabled;
-                if (AutoStartDefaultPolicy.ShouldMarkApplied(effective))
-                {
-                    SettingsService.Settings.AutoStartDefaultApplied = true;
-                }
-
-                SettingsService.SaveDebounced();
-            }
-
-            DeskBox.Platform.UiDispatch.RunOrDefer(Commit);
-
-            Log(
-                $"[AutoStart] One-time default applied: initial={initialState} effective={effective} mirror={enabled}");
-        }
-        catch (Exception ex)
-        {
-            Log($"[AutoStart] One-time default failed: {ex.Message}");
-        }
-    }
-
-    /// <summary>
     /// Adapts a freshly applied full restore to this machine. The archived
     /// settings describe the source machine: its startup registration and its
     /// user-profile-local paths do not exist here. The startup choice is
@@ -1982,21 +2367,25 @@ public partial class App : Application
         bool autoStartReRegistered = false;
         if (SettingsService.Settings.Core.AutoStart && SettingsService.Settings.Core.AutoStartDefaultApplied)
         {
-            // Registration state reads and writes shell out to schtasks (and
-            // the packaged channel may prompt for consent), so they stay off
-            // the UI thread exactly like the one-time default.
-            StartupRegistrationState state = await Task.Run(() => StartupService.Current.GetState());
+            // Registration state reads and writes talk to COM Task Scheduler /
+            // registry / WinRT StartupTask (which may prompt for consent on the
+            // packaged channel), so they stay off the blocking launch path.
+            StartupOperationResult status = await StartupService.GetStatusAsync();
+            StartupRegistrationState state = status.State;
             if (RestoreAutoStartReconcilePolicy.ShouldRegister(SettingsService.Settings.Core.AutoStart, state))
             {
-                StartupOperationResult result = await Task.Run(() => StartupService.SetEnabled(true));
+                StartupOperationResult result = await StartupService.SetEnabledAsync(true);
                 // Only a live registration backs the notification's assertion:
                 // the packaged channel's Pending means the consent dialog is
                 // still in flight and the user may decline it.
                 autoStartReRegistered = RestoreAutoStartReconcilePolicy.IsRegistered(result.State);
+                SyncApplicationRestartRegistration(AutoStartDefaultPolicy.IsEnabledState(result.State));
+                StartupService.NotifyStateChanged();
                 Log($"[DataBackup] Post-restore autostart reconcile: {state} → {result.State}.");
             }
             else
             {
+                SyncApplicationRestartRegistration(AutoStartDefaultPolicy.IsEnabledState(state));
                 Log($"[DataBackup] Post-restore autostart reconcile: state={state}, left as-is.");
             }
         }
@@ -2096,14 +2485,14 @@ public partial class App : Application
             }
         }
 
-        if (GlobalHotkeyService is not { } hotkeyService || _trayWindow is null)
+        if (GlobalHotkeyService is not { } hotkeyService || TrayHostWindowHandle == IntPtr.Zero)
         {
             return;
         }
 
         try
         {
-            IntPtr trayWindowHandle = WindowNative.GetWindowHandle(_trayWindow);
+            IntPtr trayWindowHandle = TrayHostWindowHandle;
             if (trayWindowHandle != IntPtr.Zero && !hotkeyService.IsRegistered)
             {
                 Log(
@@ -2131,13 +2520,12 @@ public partial class App : Application
             // Invalidate the desktop icon view cache since work areas may have changed
             WidgetLayerService.InvalidateDesktopIconViewCache();
 
-            ApplyRemovalGrace();
             RequestDisplayTopologyRestore("display-area-watcher");
             VirtualDisplayAdvisor.WarnIfPrimaryDisplayIsVirtual(
                 (titleKey, bodyKey) => ShowSettingsNotification(
                     titleKey,
                     bodyKey,
-                    NotificationIcon.Warning));
+                    TrayBalloonIconKind.Warning));
 
             // TryEnqueue keeps the raise on the UI thread regardless of which
             // thread the watcher fired from.
@@ -2168,6 +2556,7 @@ public partial class App : Application
         if (gate.ClosedReasons.Contains(DisplayTopologyGateReason.RemovalGrace))
         {
             gate.ObserveDisplays(current);
+            UpdateTopologyGatePollingTimerState();
             return;
         }
 
@@ -2175,17 +2564,19 @@ public partial class App : Application
         if (active.Count > 0 && DisplayIdentityTokens.IsTrueSubset(current, active))
         {
             gate.StartRemovalGrace(active, current);
+            UpdateTopologyGatePollingTimerState();
         }
     }
 
     private DispatcherQueueTimer? _topologyGatePollTimer;
 
     /// <summary>
-    /// Shared 2s poll (spec 5.6): parks restores while a fullscreen app owns
-    /// the screen, and advances an open removal grace. Cheap single P/Invoke
-    /// per tick.
+    /// Demand-driven 2s poll (spec 5.6): runs only while at least one topology
+    /// gate is closed (e.g. fullscreen hold or active removal grace) and stops
+    /// immediately once all gates reopen so idle desktop sessions pay zero
+    /// periodic timer wakeups.
     /// </summary>
-    private void StartTopologyGatePolling()
+    private void InitializeTopologyGatePolling()
     {
         if (_topologyGatePollTimer is not null || UiDispatcherQueue is null)
         {
@@ -2223,8 +2614,74 @@ public partial class App : Application
             {
                 Log($"[DisplayTopology] Gate poll failed: {ex.Message}");
             }
+            finally
+            {
+                UpdateTopologyGatePollingTimerState();
+            }
         };
-        _topologyGatePollTimer.Start();
+
+        SyncFullscreenAndUpdateTopologyGatePolling();
+    }
+
+    private void SyncFullscreenAndUpdateTopologyGatePolling()
+    {
+        var gate = _displayTopologyTransitionCoordinator?.Gate;
+        if (gate is null)
+        {
+            _topologyGatePollTimer?.Stop();
+            return;
+        }
+
+        try
+        {
+            if (Win32Helper.IsFullscreenAppActive())
+            {
+                gate.Close(DisplayTopologyGateReason.FullscreenApp);
+            }
+            else
+            {
+                gate.Open(DisplayTopologyGateReason.FullscreenApp);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log($"[DisplayTopology] Fullscreen gate sync failed: {ex.Message}");
+        }
+
+        UpdateTopologyGatePollingTimerState();
+    }
+
+    private void UpdateTopologyGatePollingTimerState()
+    {
+        if (_topologyGatePollTimer is null)
+        {
+            return;
+        }
+
+        var gate = _displayTopologyTransitionCoordinator?.Gate;
+        if (gate is not null && gate.ClosedReasons.Count > 0)
+        {
+            if (!_topologyGatePollTimer.IsRunning)
+            {
+                _topologyGatePollTimer.Start();
+            }
+        }
+        else
+        {
+            _topologyGatePollTimer.Stop();
+        }
+    }
+
+    private void OnOccludedMonitorsChanged(IReadOnlySet<IntPtr> occludedMonitors)
+    {
+        if (IsShuttingDown)
+        {
+            return;
+        }
+
+        WidgetManager?.ApplyMonitorOcclusionState(occludedMonitors);
+        SyncFullscreenAndUpdateTopologyGatePolling();
+        ReconcileQuiescenceWorkingSetTrimSchedule();
     }
 
     /// <summary>
@@ -2263,6 +2720,14 @@ public partial class App : Application
 
     internal void RequestDisplayTopologyRestore(string reason)
     {
+        if (UiDispatcherQueue is { HasThreadAccess: false }) { UiDispatcherQueue.TryEnqueue(() => RequestDisplayTopologyRestore(reason)); return; }
+        if (reason is "widget-window-message" or "xaml-root-scale")
+        {
+            _displayAreaWatcher?.RefreshNow();
+        }
+
+        ApplyRemovalGrace();
+        SyncFullscreenAndUpdateTopologyGatePolling();
         _displayTopologyTransitionCoordinator?.RequestRestore(reason);
     }
 
@@ -2273,6 +2738,7 @@ public partial class App : Application
     internal void EndDisplayRemovalGraceByUserAction()
     {
         _displayTopologyTransitionCoordinator?.Gate.EndGraceByUserAction();
+        UpdateTopologyGatePollingTimerState();
     }
 
     /// <summary>
@@ -2292,31 +2758,37 @@ public partial class App : Application
         {
             case "session-locked":
                 gate.Close(DisplayTopologyGateReason.SessionLocked);
+                WidgetManager?.SetCustomWidgetsSessionLocked(true);
                 break;
             case "session-unlocked":
                 gate.Open(DisplayTopologyGateReason.SessionLocked);
+                WidgetManager?.SetCustomWidgetsSessionLocked(false);
                 break;
             case "display-power-off":
                 gate.Close(DisplayTopologyGateReason.DisplayOff);
+                WidgetManager?.SetCustomWidgetsDisplayPowerOff(true);
                 break;
             case "display-power-on":
                 gate.Open(DisplayTopologyGateReason.DisplayOff);
+                WidgetManager?.SetCustomWidgetsDisplayPowerOff(false);
                 break;
         }
+
+        UpdateTopologyGatePollingTimerState();
     }
 
     private AppDiagnosticsService? _diagnosticsService;
 
     private void InitializeLifecycleRecoveryWatcher()
     {
-        if (_trayWindow is null)
+        if (TrayHostWindowHandle == IntPtr.Zero)
         {
             return;
         }
 
         try
         {
-            IntPtr trayHwnd = WindowNative.GetWindowHandle(_trayWindow);
+            IntPtr trayHwnd = TrayHostWindowHandle;
             if (trayHwnd != IntPtr.Zero)
             {
                 _lifecycleRecoveryWatcher = new AppLifecycleRecoveryWatcher(
@@ -2344,12 +2816,14 @@ public partial class App : Application
                     static message => LogVerbose(message));
                 _hookHealthWatchdog.Watch(() => GlobalHotkeyService);
                 _hookHealthWatchdog.Watch(() => _searchHotkeyService);
+                _hookHealthWatchdog.Watch(() => _clipboardHotkeyService);
                 _hookHealthWatchdog.Watch(() => DesktopDoubleClickActivationService);
                 // RegisterHotKey chords have no hook to probe; the watchdog
                 // keeps them alive with a periodic unregister+register
                 // round-trip instead (feedback 308/371).
                 _hookHealthWatchdog.WatchMaintenance(() => GlobalHotkeyService);
                 _hookHealthWatchdog.WatchMaintenance(() => _searchHotkeyService);
+                _hookHealthWatchdog.WatchMaintenance(() => _clipboardHotkeyService);
             }
             catch (Exception ex)
             {
@@ -2364,6 +2838,11 @@ public partial class App : Application
     {
         Log($"[Lifecycle] Recovery signal received: {reason}");
         _diagnosticsService?.RecordLifecycleEvent(reason);
+        if (string.Equals(reason, "time-change", StringComparison.Ordinal))
+        {
+            ScheduleExternalStateRecovery();
+            return;
+        }
         // S6 instrumentation (silent freeze after explorer restart): the
         // topology-recovery storm re-parents and re-positions every widget.
         // Verbose carries the timing breakdown; the default-level line fires
@@ -2397,6 +2876,7 @@ public partial class App : Application
                 GlobalHotkeyService?.RefreshRegistration();
                 DesktopDoubleClickActivationService?.RefreshRegistration();
                 _searchHotkeyService?.RefreshRegistration();
+                _clipboardHotkeyService?.RefreshRegistration();
             }
             catch (Exception ex)
             {
@@ -2417,6 +2897,15 @@ public partial class App : Application
         // The OS ends the process after this flush without the shutdown
         // sequence, so the launch breadcrumb is closed here.
         _startupSessionLedger?.MarkCleanExit();
+        try
+        {
+            WidgetManager?.FlushDirtyFeatureWidgetsForEndSession();
+            _quickCaptureWindowCoordinator?.FlushAllForShutdown();
+        }
+        catch (Exception ex)
+        {
+            Log($"[Lifecycle] Feature widget end-session flush failed for {reason}: {ex.Message}");
+        }
         // Deep review R15 (F1 audit): QUERYENDSESSION and ENDSESSION both
         // route here, and each pass used to perform an unconditional full
         // settings rewrite (up to 2x3s of UI-thread blocking inside
@@ -2457,7 +2946,7 @@ public partial class App : Application
 
     private void ScheduleBackgroundUpdateCheck()
     {
-        if (DistributionService.IsMicrosoftStore)
+        if (DistributionService.IsMicrosoftStore || DistributionService.IsPackaged)
         {
             return;
         }
@@ -2467,8 +2956,12 @@ public partial class App : Application
             return;
         }
 
-        _ = Task.Run(() => BackgroundUpdateCheckLoopAsync(
-            IsStartupMode ? TimeSpan.FromSeconds(45) : TimeSpan.FromSeconds(12)));
+        TimeSpan baseDelay = IsStartupMode ? TimeSpan.FromSeconds(45) : TimeSpan.FromSeconds(12);
+        TimeSpan initialDelay = BackgroundUpdateCheckPolicy.GetInitialStartupDelay(
+            baseDelay,
+            SettingsService.Settings.LastUpdateCheckAt,
+            DateTimeOffset.Now);
+        _ = Task.Run(() => BackgroundUpdateCheckLoopAsync(initialDelay));
     }
 
     /// <summary>
@@ -2529,6 +3022,55 @@ public partial class App : Application
             }
 
             nextCheckAt = DateTimeOffset.Now + BackgroundUpdateCheckPolicy.GetDelayUntilNextCheck(status);
+        }
+    }
+    private void ScheduleBackgroundWidgetCatalogSync()
+    {
+        TimeSpan initialDelay = IsStartupMode ? TimeSpan.FromSeconds(50) : TimeSpan.FromSeconds(20);
+        _ = Task.Run(() => BackgroundWidgetCatalogSyncLoopAsync(initialDelay));
+    }
+
+    private async Task BackgroundWidgetCatalogSyncLoopAsync(TimeSpan initialDelay)
+    {
+        DateTimeOffset nextSyncAt = DateTimeOffset.Now + initialDelay;
+        while (!IsShuttingDown)
+        {
+            while (!IsShuttingDown)
+            {
+                TimeSpan remaining = nextSyncAt - DateTimeOffset.Now;
+                if (remaining <= TimeSpan.Zero)
+                {
+                    break;
+                }
+
+                await Task.Delay(remaining);
+            }
+
+            if (IsShuttingDown)
+            {
+                return;
+            }
+
+            try
+            {
+                bool catalogUpdated = await DeskBox.Services.CustomWidgetRemoteCatalogService.Shared
+                    .RefreshInBackgroundAsync()
+                    .ConfigureAwait(false);
+                _ = await DeskBox.Services.CustomWidgetRemotePromptService.Shared
+                    .RefreshInBackgroundAsync()
+                    .ConfigureAwait(false);
+
+                if (catalogUpdated)
+                {
+                    Log("[WidgetCatalog] Applied remote template catalog OTA update.");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log($"[WidgetCatalog] Background sync skipped: {ex.Message}");
+            }
+
+            nextSyncAt = DateTimeOffset.Now + TimeSpan.FromHours(6);
         }
     }
 
@@ -2608,13 +3150,12 @@ public partial class App : Application
                     LocalizationService,
                     manifestLoader);
                 _appReleaseNotesWindow = window;
-                window.Closed += (_, _) =>
+                SubscribeWindowClosedOnce(window, () =>
                 {
-                    if (ReferenceEquals(_appReleaseNotesWindow, window))
-                    {
-                        _appReleaseNotesWindow = null;
-                    }
-                };
+                    if (ReferenceEquals(_appReleaseNotesWindow, window)) _appReleaseNotesWindow = null;
+                    ScheduleLightMemoryCleanup(completedHeavyOperation: true);
+                    ScheduleBackgroundMemoryCleanup("release-notes-closed");
+                });
             }
             else if (manifest is not null)
             {
@@ -2645,10 +3186,19 @@ public partial class App : Application
         CancellationToken cancellationToken)
     {
         var contentManifest = await AppUpdateServiceStatic.FetchContentManifestAsync(cancellationToken);
-        if (contentManifest is not null &&
-            string.Equals(contentManifest.Version.Trim(), version.Trim(), StringComparison.Ordinal))
+        if (contentManifest is not null)
         {
-            return contentManifest;
+            var normalized = AppUpdateServiceStatic.NormalizeManifestForReleaseNotes(contentManifest, version);
+            if (string.Equals(normalized.Version.Trim(), version.Trim(), StringComparison.OrdinalIgnoreCase) ||
+                contentManifest.IsVersionBlocked(version) ||
+                string.Equals(AppUpdateManifest.NormalizeVersionToken(version), "1.0.0", StringComparison.OrdinalIgnoreCase))
+            {
+                return normalized;
+            }
+
+            var fallback = AppUpdateServiceStatic.CreateReleaseNotesOnlyManifest(version);
+            fallback.BlockedVersions = [.. contentManifest.BlockedVersions];
+            return fallback;
         }
 
         return AppUpdateServiceStatic.CreateReleaseNotesOnlyManifest(version);
@@ -2671,34 +3221,19 @@ public partial class App : Application
     {
         try
         {
-#if DESKBOX_AOT_SMOKE_HARNESS
-            if (_settingsWindow is not null)
-            {
-                await _settingsWindow.RunOneClickUpdateFlowAsync();
+#if DESKBOX_NATIVE_AOT && DESKBOX_AOT_SMOKE_HARNESS
+            await RunInProcessOneClickUpdateFromToastForSmokeAsync();
 #else
             if (IsSettingsHostRunning)
             {
                 _ = PushSettingsIpcEventAsync(SettingsIpcMethods.HostOneClickUpdate, null);
-#endif
             }
+#endif
         }
         catch (Exception ex)
         {
             Log($"[Update] Toast-triggered one-click update failed: {ex.Message}");
         }
-    }
-
-    internal void RefreshQuickCaptureClipboardService(bool captureCurrent = false)
-    {
-        if (IsShuttingDown) return;
-        if (!UiDispatcherQueue.HasThreadAccess)
-        {
-            UiDispatcherQueue.TryEnqueue(() =>
-                RefreshQuickCaptureClipboardService(captureCurrent));
-            return;
-        }
-
-        _quickCaptureSettings?.RefreshFromSettings(captureCurrent);
     }
 
     internal TodoReminderService? RefreshTodoReminderService(bool checkNow = false)
@@ -2791,18 +3326,8 @@ public partial class App : Application
     /// Reminder activations arrive marshaled on the UI thread, matching the
     /// VM's apartment.
     /// </summary>
-    private ViewModels.TodoWidgetViewModel? TryGetLiveTodoViewModel(string widgetId)
-    {
-        if (WidgetManager?.ContentWidgets.TryGetValue(widgetId, out var window) != true)
-        {
-            return null;
-        }
-
-        return window.CurrentContent is Controls.WidgetContents.TodoWidgetContentAdapter adapter &&
-            adapter.ViewModel.IsInitialized
-                ? adapter.ViewModel
-                : null;
-    }
+    private ViewModels.TodoWidgetViewModel? TryGetLiveTodoViewModel(string widgetId) =>
+        WidgetManager?.TryGetLiveTodoViewModel(widgetId);
 
     private EyeRestTimerService CreateEyeRestTimerService()
     {
@@ -3038,7 +3563,7 @@ public partial class App : Application
                     // The spawn carries the intent: pushing right after a
                     // cold spawn lands before the host pipe connects and
                     // would be silently dropped (batch R1).
-#if DESKBOX_AOT_SMOKE_HARNESS
+#if DESKBOX_NATIVE_AOT && DESKBOX_AOT_SMOKE_HARNESS
                     OpenAboutSettingsFromTray();
                     _ = RunOneClickUpdateFromToastAsync();
 #else
@@ -3088,12 +3613,14 @@ public partial class App : Application
             return;
         }
 
-        _nativeNotificationService?.TryShow(
-            LocalizationService.T("DesktopOrganization.Notification.Title"),
-            LocalizationService.Format(
-                "DesktopOrganization.Notification.Body",
-                completed.FileName,
-                completed.TargetWidgetName),
+        string title = LocalizationService.T("DesktopOrganization.Notification.Title");
+        string body = LocalizationService.Format(
+            "DesktopOrganization.Notification.Body",
+            completed.FileName,
+            completed.TargetWidgetName);
+        if (_nativeNotificationService?.TryShow(
+            title,
+            body,
             new Dictionary<string, string>
             {
                 ["type"] = "desktop-organization",
@@ -3111,7 +3638,29 @@ public partial class App : Application
             ],
             options: new NativeAppNotificationOptions(
                 Tag: "desktop-auto-organization",
-                Group: DesktopOrganizationNotificationGroup));
+                Group: DesktopOrganizationNotificationGroup)) != true)
+        {
+            if (_trayHost is { IsCreated: true })
+            {
+                try
+                {
+                    _trayHost.ShowNotification(
+                        title,
+                        body,
+                        TrayBalloonIconKind.Info,
+                        customIconHandle: null,
+                        largeIcon: true,
+                        sound: false,
+                        respectQuietTime: true,
+                        realtime: false,
+                        timeout: TimeSpan.FromSeconds(8));
+                }
+                catch (Exception ex)
+                {
+                    Log($"[DesktopOrganization] Tray notification failed: {ex.Message}");
+                }
+            }
+        }
     }
 
     /// <summary>
@@ -3156,17 +3705,17 @@ public partial class App : Application
                 },
                 options: new NativeAppNotificationOptions(
                     Tag: DesktopOrganizationTargetUnavailableNotificationTag,
-                    Group: DesktopOrganizationNotificationGroup)) == true || _trayIcon is null)
+                    Group: DesktopOrganizationNotificationGroup)) == true || _trayHost is not { IsCreated: true })
         {
             return;
         }
 
         try
         {
-            _trayIcon.ShowNotification(
+            _trayHost.ShowNotification(
                 title,
                 message,
-                NotificationIcon.Warning,
+                TrayBalloonIconKind.Warning,
                 customIconHandle: null,
                 largeIcon: false,
                 sound: false,
@@ -3317,8 +3866,19 @@ public partial class App : Application
         }
 
         await window.ContentReadyTask;
-        if (window.CurrentContent is not TodoWidgetContentAdapter adapter ||
-            adapter.View is not TodoWidgetContent todoContent)
+        if (window.CurrentContent is not TodoWidgetContentAdapter adapter)
+        {
+            return false;
+        }
+
+        if (!adapter.HasMaterializedView)
+        {
+            await adapter.RefreshAsync();
+            window.RefreshCompactPresentationFromHost();
+            return window.Visible;
+        }
+
+        if (adapter.View is not TodoWidgetContent todoContent)
         {
             return false;
         }
@@ -3368,17 +3928,17 @@ public partial class App : Application
             return;
         }
 
-        if (_trayIcon is null)
+        if (_trayHost is not { IsCreated: true })
         {
             return;
         }
 
         try
         {
-            _trayIcon.ShowNotification(
+            _trayHost.ShowNotification(
                 title,
                 message,
-                NotificationIcon.Info,
+                TrayBalloonIconKind.Info,
                 customIconHandle: null,
                 largeIcon: false,
                 sound: false,
@@ -3421,17 +3981,17 @@ public partial class App : Application
             return;
         }
 
-        if (_trayIcon is null)
+        if (_trayHost is not { IsCreated: true })
         {
             return;
         }
 
         try
         {
-            _trayIcon.ShowNotification(
+            _trayHost.ShowNotification(
                 notification.Title,
                 notification.Message,
-                NotificationIcon.Info,
+                TrayBalloonIconKind.Info,
                 customIconHandle: null,
                 largeIcon: true,
                 sound: false,
@@ -3734,8 +4294,15 @@ public partial class App : Application
         RefreshTrayMenuText();
         RefreshTrayToolTipText();
 
+        string currentVersion = AppUpdateServiceStatic.GetCurrentAppVersion();
+        bool isMandatory = manifest.IsMandatoryForVersion(currentVersion);
+        if (manifest.ShouldSuppressToastNotification(currentVersion))
+        {
+            return;
+        }
+
         if (_updateReadyNotificationShownVersion == manifest.Version ||
-            !SettingsService.Settings.ShowUpdateToastNotification)
+            (!SettingsService.Settings.ShowUpdateToastNotification && !isMandatory))
         {
             return;
         }
@@ -3747,8 +4314,11 @@ public partial class App : Application
             return;
         }
 
-        string title = LocalizationService.T("Tray.UpdateAvailableTitle");
-        string message = LocalizationService.Format("Tray.UpdateDownloadedMessage", manifest.Version);
+        string title = LocalizationService.T(
+            isMandatory ? "Tray.UpdateMandatoryTitle" : "Tray.UpdateAvailableTitle");
+        string message = LocalizationService.Format(
+            isMandatory ? "Tray.UpdateMandatoryDownloadedMessage" : "Tray.UpdateDownloadedMessage",
+            manifest.Version);
         var updateNowArguments = new Dictionary<string, string>
         {
             ["type"] = "update",
@@ -3775,7 +4345,32 @@ public partial class App : Application
                     Tag: "update-available",
                     Group: "update")) != true)
         {
-            return;
+            if (_trayHost is not { IsCreated: true })
+            {
+                return;
+            }
+
+            try
+            {
+                if (!_trayHost.ShowNotification(
+                        title,
+                        message,
+                        isMandatory ? TrayBalloonIconKind.Warning : TrayBalloonIconKind.Info,
+                        customIconHandle: null,
+                        largeIcon: true,
+                        sound: isMandatory,
+                        respectQuietTime: !isMandatory,
+                        realtime: false,
+                        timeout: TimeSpan.FromSeconds(8)))
+                {
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log($"[Update] Ready-to-install tray notification failed: {ex.Message}");
+                return;
+            }
         }
 
         _updateReadyNotificationShownVersion = manifest.Version;
@@ -3788,17 +4383,29 @@ public partial class App : Application
         RefreshTrayMenuText();
         RefreshTrayToolTipText();
 
-        // One toast per version rather than per process: a re-check that
-        // still sees the same version stays silent, while a genuinely newer
-        // find (relevant once periodic checks exist) may notify again.
-        if (_updateNotificationShownVersion == manifest.Version ||
-            !SettingsService.Settings.ShowUpdateToastNotification)
+        string currentVersion = AppUpdateServiceStatic.GetCurrentAppVersion();
+        bool isMandatory = manifest.IsMandatoryForVersion(currentVersion);
+        if (manifest.ShouldSuppressToastNotification(currentVersion))
         {
             return;
         }
 
-        string title = LocalizationService.T("Tray.UpdateAvailableTitle");
-        string message = LocalizationService.Format("Tray.UpdateAvailableMessage", manifest.Version);
+        // One toast per version rather than per process: a re-check that
+        // still sees the same version stays silent, while a genuinely newer
+        // find (relevant once periodic checks exist) may notify again.
+        // Light-mandatory updates notify once per version even when the user
+        // opted out of routine update toasts.
+        if (_updateNotificationShownVersion == manifest.Version ||
+            (!SettingsService.Settings.ShowUpdateToastNotification && !isMandatory))
+        {
+            return;
+        }
+
+        string title = LocalizationService.T(
+            isMandatory ? "Tray.UpdateMandatoryTitle" : "Tray.UpdateAvailableTitle");
+        string message = LocalizationService.Format(
+            isMandatory ? "Tray.UpdateMandatoryMessage" : "Tray.UpdateAvailableMessage",
+            manifest.Version);
         // A manual check that surfaces a version already on screen (the
         // settings About page) does not need a toast repeating it.
         if (IsSettingsHostVisible)
@@ -3840,21 +4447,21 @@ public partial class App : Application
             return;
         }
 
-        if (_trayIcon is null)
+        if (_trayHost is not { IsCreated: true })
         {
             return;
         }
 
         try
         {
-            _trayIcon.ShowNotification(
+            _trayHost.ShowNotification(
                 title,
                 message,
-                NotificationIcon.Info,
+                isMandatory ? TrayBalloonIconKind.Warning : TrayBalloonIconKind.Info,
                 customIconHandle: null,
                 largeIcon: true,
-                sound: false,
-                respectQuietTime: true,
+                sound: isMandatory,
+                respectQuietTime: !isMandatory,
                 realtime: false,
                 timeout: TimeSpan.FromSeconds(8));
             _updateNotificationShownVersion = manifest.Version;
@@ -3922,20 +4529,42 @@ public partial class App : Application
             else
             {
                 DrainPendingNativeNotificationActivations();
-                // Deep review R15 (F1 audit): a secondary instance writes the
-                // pending jump-list/update-result file and then sets the
-                // event; if the primary died in that window the signal died
-                // with it and the stale file survived. Without consuming it
-                // here, the next bare activation hours later replayed the
-                // stale argument (an unexpected toggle/open-storage).
-                // Running the same handler drains those files harmlessly —
-                // no event means no envelope work, just the file take.
-                await HandleExternalActivationAsync();
+                // Drain any stale forwarded jump-list or update-result marker
+                // left behind if an earlier primary died before consuming its
+                // signal, WITHOUT falling through to the bare-activation
+                // fallback (which would auto-open the settings host on
+                // every normal cold start).
+                await DrainPendingForwardedActivationsOnlyAsync();
             }
         }
         finally
         {
             RegisterActivationListener();
+        }
+    }
+
+    private async Task DrainPendingForwardedActivationsOnlyAsync()
+    {
+        string? jumpListArgument = TakePendingJumpListArgument();
+        if (!string.IsNullOrWhiteSpace(jumpListArgument))
+        {
+            await JumpListService.HandleActivationAsync(jumpListArgument);
+        }
+
+        string? pendingProtocolUri = DeskBoxProtocolActivationService.TakePendingProtocolUri();
+        if (!string.IsNullOrWhiteSpace(pendingProtocolUri))
+        {
+            await HandleProtocolActivationUriAsync(pendingProtocolUri);
+        }
+
+        string? pendingUpdateInstallOutcome = TakePendingUpdateInstallResult();
+        if (!string.IsNullOrWhiteSpace(pendingUpdateInstallOutcome))
+        {
+#if DESKBOX_NATIVE_AOT && DESKBOX_AOT_SMOKE_HARNESS
+            QueueInProcessUpdateInstallResultForSmoke(pendingUpdateInstallOutcome);
+#else
+            ShowSettingsViaHost("About", null, installResult: pendingUpdateInstallOutcome);
+#endif
         }
     }
 
@@ -3980,15 +4609,21 @@ public partial class App : Application
                     activationHandled = true;
                 }
 
+                string? pendingProtocolUri = DeskBoxProtocolActivationService.TakePendingProtocolUri();
+                if (!string.IsNullOrWhiteSpace(pendingProtocolUri))
+                {
+                    await HandleProtocolActivationUriAsync(pendingProtocolUri);
+                    activationHandled = true;
+                }
+
                 // Forwarded from a secondary launch that raced a living
                 // primary: show the same About + result dialog the direct
                 // --update-install-result startup path shows.
                 string? pendingUpdateInstallOutcome = TakePendingUpdateInstallResult();
                 if (!string.IsNullOrWhiteSpace(pendingUpdateInstallOutcome))
                 {
-#if DESKBOX_AOT_SMOKE_HARNESS
-                    ShowSettings("About");
-                    _settingsWindow?.QueueUpdateInstallResultDialog(pendingUpdateInstallOutcome);
+#if DESKBOX_NATIVE_AOT && DESKBOX_AOT_SMOKE_HARNESS
+                    QueueInProcessUpdateInstallResultForSmoke(pendingUpdateInstallOutcome);
 #else
                     ShowSettingsViaHost("About", null, installResult: pendingUpdateInstallOutcome);
 #endif
@@ -4194,17 +4829,17 @@ public partial class App : Application
                 ["section"] = "BackupRestoreSettings"
             };
 
-        if (_nativeNotificationService?.TryShow(title, message, restoreArguments) == true || _trayIcon is null)
+        if (_nativeNotificationService?.TryShow(title, message, restoreArguments) == true || _trayHost is not { IsCreated: true })
         {
             return;
         }
 
         try
         {
-            _trayIcon.ShowNotification(
+            _trayHost.ShowNotification(
                 title,
                 message,
-                NotificationIcon.Info,
+                TrayBalloonIconKind.Info,
                 customIconHandle: null,
                 largeIcon: false,
                 sound: false,
@@ -4247,14 +4882,14 @@ public partial class App : Application
                 ShowSettingsNotification(
                     "Settings.Persistence.RecoveredTitle",
                     "Settings.Persistence.RecoveredBody",
-                    NotificationIcon.Info,
+                    TrayBalloonIconKind.Info,
                     "Maintenance");
                 break;
             case SettingsLoadRecoveryState.DefaultsAfterFailure:
                 ShowSettingsNotification(
                     "Settings.Persistence.ResetTitle",
                     "Settings.Persistence.ResetBody",
-                    NotificationIcon.Warning,
+                    TrayBalloonIconKind.Warning,
                     "Maintenance");
                 break;
         }
@@ -4280,7 +4915,7 @@ public partial class App : Application
             before,
             after,
             new ExternalSettingsAppliers.Delegates(
-                () => GlobalHotkeyService?.RefreshRegistration(),
+                () => UiDispatch.RunOrDefer(() => GlobalHotkeyService?.RefreshRegistration()),
                 () => DesktopDoubleClickActivationService?.RefreshRegistration(),
                 (snapEnabled, snapSpacingDips) =>
                 {
@@ -4296,7 +4931,9 @@ public partial class App : Application
                 // touches XAML across the whole main process (same reason
                 // the theme delegate marshals).
                 () => UiDispatch.RunOrDefer(LocalizationService.NotifyExternalLanguageChange),
-                enabled => _searchEngineService?.SetDeskBoxContentSearchEnabled(enabled)));
+                enabled => _searchEngineService?.SetDeskBoxContentSearchEnabled(enabled),
+                () => UiDispatch.RunOrDefer(() => _searchHotkeyService?.RefreshRegistration()),
+                () => UiDispatch.RunOrDefer(() => _clipboardHotkeyService?.RefreshRegistration())));
     }
 
     private void RefreshThemeAppearanceOnUi() => ThemeService.RefreshAppearance();
@@ -4321,7 +4958,7 @@ public partial class App : Application
         ShowSettingsNotification(
             "Settings.Persistence.SaveFailedTitle",
             "Settings.Persistence.SaveFailedBody",
-            NotificationIcon.Warning,
+            TrayBalloonIconKind.Warning,
             "Maintenance");
     }
 
@@ -4340,8 +4977,21 @@ public partial class App : Application
                 (titleKey, bodyKey) => ShowSettingsNotification(
                     titleKey,
                     bodyKey,
-                    NotificationIcon.Warning,
+                    TrayBalloonIconKind.Warning,
                     "AppearanceMaterialSettings")));
+    }
+
+    private bool IsAnyScheduledBackupEnabled()
+    {
+        var settings = SettingsService.Settings;
+        if (settings.Backup.AutomaticBackupEnabled)
+        {
+            return true;
+        }
+
+        string? provider = settings.CloudBackup.CloudBackupProvider;
+        return !string.IsNullOrWhiteSpace(provider) &&
+               !string.Equals(provider, "none", StringComparison.OrdinalIgnoreCase);
     }
 
     private void OnBackupSettingsChanged()
@@ -4352,12 +5002,25 @@ public partial class App : Application
             dispatcher.TryEnqueue(OnBackupSettingsChanged);
             return;
         }
+
+        if (!_backupTimerStarted && IsAnyScheduledBackupEnabled())
+        {
+            _backupRuntime?.Start();
+            _backupTimerStarted = true;
+        }
+
         _backupRuntime?.RefreshOptions(checkSchedule: true);
     }
 
     private void StartAutomaticBackupTimer()
     {
+        if (!IsAnyScheduledBackupEnabled())
+        {
+            return;
+        }
+
         _backupRuntime?.Start();
+        _backupTimerStarted = true;
     }
 
     private void OnCloudBackupRunCompleted(CloudBackupRunCompletedInfo info)
@@ -4384,7 +5047,7 @@ public partial class App : Application
             ShowSettingsNotification(
                 "Settings.CloudBackup.UploadUnverified.Title",
                 "Settings.CloudBackup.UploadUnverified.Body",
-                NotificationIcon.Warning,
+                TrayBalloonIconKind.Warning,
                 "CloudBackupSettings");
             return;
         }
@@ -4401,7 +5064,7 @@ public partial class App : Application
         ShowSettingsNotification(
             "Settings.CloudBackup.ScheduledFailure.Title",
             "Settings.CloudBackup.ScheduledFailure.Body",
-            NotificationIcon.Warning,
+            TrayBalloonIconKind.Warning,
             "CloudBackupSettings");
     }
 
@@ -4417,7 +5080,7 @@ public partial class App : Application
         ShowSettingsNotification(
             "Settings.DataBackup.AutomaticBackupDirectory.FallbackTitle",
             "Settings.DataBackup.AutomaticBackupDirectory.FallbackBody",
-            NotificationIcon.Warning,
+            TrayBalloonIconKind.Warning,
             "BackupRestoreSettings");
     }
 
@@ -4431,7 +5094,7 @@ public partial class App : Application
     private bool ShowSettingsNotification(
         string titleKey,
         string bodyKey,
-        NotificationIcon icon,
+        TrayBalloonIconKind icon,
         string? sectionTag = null)
     {
         if (LocalizationService is null || IsShuttingDown)
@@ -4456,14 +5119,14 @@ public partial class App : Application
             return true;
         }
 
-        if (_trayIcon is null)
+        if (_trayHost is not { IsCreated: true })
         {
             return false;
         }
 
         try
         {
-            _trayIcon.ShowNotification(
+            _trayHost.ShowNotification(
                 title,
                 message,
                 icon,
@@ -4498,17 +5161,17 @@ public partial class App : Application
                 {
                     ["type"] = "settings",
                     ["section"] = "ManagedStorage"
-                }) == true || _trayIcon is null)
+                }) == true || _trayHost is not { IsCreated: true })
         {
             return;
         }
 
         try
         {
-            _trayIcon.ShowNotification(
+            _trayHost.ShowNotification(
                 title,
                 message,
-                NotificationIcon.Warning,
+                TrayBalloonIconKind.Warning,
                 customIconHandle: null,
                 largeIcon: false,
                 sound: false,
@@ -4542,17 +5205,17 @@ public partial class App : Application
                 {
                     ["type"] = "settings",
                     ["section"] = "BackupRestoreSettings"
-                }) == true || _trayIcon is null)
+                }) == true || _trayHost is not { IsCreated: true })
         {
             return;
         }
 
         try
         {
-            _trayIcon.ShowNotification(
+            _trayHost.ShowNotification(
                 title,
                 message,
-                NotificationIcon.Info,
+                TrayBalloonIconKind.Info,
                 customIconHandle: null,
                 largeIcon: false,
                 sound: false,
@@ -4598,10 +5261,12 @@ public partial class App : Application
     {
         try
         {
-            RefreshQuickCaptureClipboardService(captureCurrent: true);
+            _quickCaptureSettings?.RefreshFromSettings();
 
             if (WidgetManager is not null)
             {
+                WidgetManager.RefreshTodoWidgetsForDateRollover();
+
                 string[] fileWidgetIds = SettingsService.Settings.Widgets
                     .Where(widget => widget.WidgetKind == WidgetKind.File &&
                                      !widget.IsDisabled &&
@@ -4613,6 +5278,8 @@ public partial class App : Application
                 {
                     await WidgetManager.RefreshFileWidgetAsync(widgetId);
                 }
+
+                await WidgetManager.RefreshCustomWidgetsAfterResumeAsync();
             }
 
             Log("[Lifecycle] External state recovery completed.");
@@ -4657,98 +5324,12 @@ public partial class App : Application
 
     private void OpenSettings()
     {
-#if DESKBOX_AOT_SMOKE_HARNESS
-        // The harness drives the settings window inside its own single
-        // process; a second-process host cannot exist there.
-        CancelBackgroundMemoryCleanup();
-        var settingsWindow = _settingsWindow ?? CreateSettingsWindow();
-        settingsWindow.ShowWindow();
+#if DESKBOX_NATIVE_AOT && DESKBOX_AOT_SMOKE_HARNESS
+        OpenInProcessSettingsForSmoke();
 #else
         ShowSettingsViaHost(null, null);
 #endif
     }
-
-#if DESKBOX_AOT_SMOKE_HARNESS
-    // In-process settings window construction — smoke harness only (batch 4:
-    // the retail binary opens settings exclusively in the settings-host
-    // process).
-    private SettingsWindow CreateSettingsWindow()
-    {
-        var input = new SettingsWindowFactoryInput(
-            SettingsService, ThemeService, LocalizationService,
-            _todoSettings ?? throw new InvalidOperationException("Todo settings are not initialized."),
-            _featureWidgetsSettings ?? throw new InvalidOperationException("Feature widgets settings are not initialized."),
-            _searchSettings ?? throw new InvalidOperationException("Search settings are not initialized."),
-            _backupSettings ?? throw new InvalidOperationException("Backup settings are not initialized."),
-            _backupRestoreActions ?? throw new InvalidOperationException(
-                "Backup restore actions are not initialized."),
-            _quickCaptureSettings ?? throw new InvalidOperationException("Quick Capture is not initialized."),
-            _backupRuntime ?? throw new InvalidOperationException("Backup runtime is not initialized."),
-            _appearanceSettings ?? throw new InvalidOperationException("Appearance settings are not initialized."),
-            _capsuleSettings ?? throw new InvalidOperationException("Capsule settings are not initialized."),
-            _interactionSettings ?? throw new InvalidOperationException("Interaction settings are not initialized."),
-            _fileDisplaySettings ?? throw new InvalidOperationException("File display settings are not initialized."),
-            _fileStackSettings ?? throw new InvalidOperationException("File stack settings are not initialized."),
-            _groupNavigationSettings ?? throw new InvalidOperationException("Group navigation settings are not initialized."),
-            _managedStorageSettings ?? throw new InvalidOperationException("Managed storage settings are not initialized."),
-            _maintenanceSettings ?? throw new InvalidOperationException("Maintenance settings are not initialized."),
-            _eyeRestSettings ?? throw new InvalidOperationException("Eye rest settings are not initialized."),
-            _performanceSettings ?? throw new InvalidOperationException("Performance settings are not initialized."),
-            CreateSettingsHotkeyActions(),
-            new InProcessSettingsWidgetActions(
-                WidgetManager,
-                SettingsService,
-                FileService,
-                OrganizerService,
-                LocalizationService,
-                applyQuickCaptureEnabled: enabled =>
-                    (_quickCaptureSettings ?? throw new InvalidOperationException(
-                        "Quick Capture is not initialized.")).SetEnabledAsync(enabled, reveal: enabled),
-                applyTodoEnabled: enabled =>
-                    (_todoSettings ?? throw new InvalidOperationException(
-                        "Todo settings are not initialized.")).SetEnabledAsync(enabled),
-                applySearchEnabled: enabled =>
-                    (_searchSettings ?? throw new InvalidOperationException(
-                        "Search settings are not initialized.")).SetEnabledAsync(enabled, reveal: enabled)),
-            new InProcessSettingsRestoreActions(
-                DataBackupService ?? throw new InvalidOperationException("Backup service is not initialized."),
-                AttachmentHealthService ?? throw new InvalidOperationException("Attachment health service is not initialized.")),
-            new InProcessSettingsAppActions(this, LocalizationService),
-            new InProcessSettingsDataActions(
-                QuickCaptureService ?? throw new InvalidOperationException("Quick Capture service is not initialized."),
-                LocalizationService),
-            AppUpdateService,
-            action => UiDispatcherQueue.TryEnqueue(() => action()));
-        _settingsWindow = input.CreateWindow();
-        _settingsWindow.Closed += SettingsWindow_ClosedForApp;
-        return _settingsWindow;
-    }
-
-    private Contracts.ISettingsHotkeyActions CreateSettingsHotkeyActions() =>
-        new InProcessSettingsHotkeyActions(
-            GlobalHotkeyService,
-            SearchHotkeyService,
-            DesktopDoubleClickActivationService,
-            SettingsService);
-
-    private void SettingsWindow_ClosedForApp(object sender, WindowEventArgs args)
-    {
-        // Hide-and-reuse cancels at AppWindow.Closing and never reaches this
-        // event; Closed only ever runs for real destruction (shutdown).
-        if (sender is SettingsWindow settingsWindow)
-        {
-            settingsWindow.Closed -= SettingsWindow_ClosedForApp;
-        }
-
-        if (ReferenceEquals(_settingsWindow, sender))
-        {
-            _settingsWindow = null;
-        }
-
-        ScheduleLightMemoryCleanup(completedHeavyOperation: true);
-        ScheduleBackgroundMemoryCleanup("settings-closed");
-    }
-#endif
 
     public void ShowSettings()
     {
@@ -4759,11 +5340,8 @@ public partial class App : Application
     public void ShowSettings(string sectionTag)
     {
         if (IsShuttingDown) return;
-#if DESKBOX_AOT_SMOKE_HARNESS
-        CancelBackgroundMemoryCleanup();
-        var settingsWindow = _settingsWindow ?? CreateSettingsWindow();
-        settingsWindow.ShowWindow();
-        settingsWindow.ShowSection(sectionTag);
+#if DESKBOX_NATIVE_AOT && DESKBOX_AOT_SMOKE_HARNESS
+        OpenInProcessSettingsForSmoke(sectionTag);
 #else
         ShowSettingsViaHost(sectionTag, null);
 #endif
@@ -4772,11 +5350,8 @@ public partial class App : Application
     public void ShowGlanceSettings(string widgetId)
     {
         if (IsShuttingDown) return;
-#if DESKBOX_AOT_SMOKE_HARNESS
-        CancelBackgroundMemoryCleanup();
-        var settingsWindow = _settingsWindow ?? CreateSettingsWindow();
-        settingsWindow.ShowWindow();
-        settingsWindow.ShowGlanceSection(widgetId);
+#if DESKBOX_NATIVE_AOT && DESKBOX_AOT_SMOKE_HARNESS
+        ShowInProcessGlanceSettingsForSmoke(widgetId);
 #else
         ShowSettingsViaHost(null, widgetId);
 #endif
@@ -4927,9 +5502,10 @@ public partial class App : Application
             RecoveryOfferOutcome outcome;
             try
             {
-                _recoveryOfferWindow = new RecoveryOfferWindow(LocalizationService, candidate);
-                _recoveryOfferWindow.Closed += (_, _) => _recoveryOfferWindow = null;
-                ThemeService.TrackWindow(_recoveryOfferWindow);
+                EnsureXamlLoopLifelineIfNoOtherWindows();
+                var recoveryWindow = new RecoveryOfferWindow(LocalizationService, candidate, ThemeService);
+                _recoveryOfferWindow = recoveryWindow;
+                SubscribeWindowClosedOnce(recoveryWindow, () => { if (ReferenceEquals(_recoveryOfferWindow, recoveryWindow)) _recoveryOfferWindow = null; });
                 _recoveryOfferWindow.Activate();
                 Log($"[RecoveryOffer] Offer shown for snapshot '{candidate.Path}'.");
 
@@ -5111,10 +5687,10 @@ public partial class App : Application
             // ShowNotification throws rather than no-ops in that state.
             try
             {
-                _trayIcon?.ShowNotification(
+                _trayHost?.ShowNotification(
                     title,
                     message,
-                    isError ? NotificationIcon.Error : NotificationIcon.Info,
+                    isError ? TrayBalloonIconKind.Error : TrayBalloonIconKind.Info,
                     customIconHandle: null,
                     largeIcon: false,
                     sound: false,
@@ -5193,6 +5769,7 @@ public partial class App : Application
     /// </summary>
     private void ShowElevationNoticeIfNeeded()
     {
+#if !DESKBOX_PGO_INSTRUMENTATION
         if (!_startupElevationAssessment.IsCurrentProcessElevated ||
             IsShuttingDown ||
             _elevationNoticeWindow is not null)
@@ -5212,35 +5789,29 @@ public partial class App : Application
             // the user exits via the button or the window X, their next normal
             // launch must be able to land unelevated. Failures log only.
             _ = DragDropPermissionService.ClearElevationCompatibilityFlags();
+            _ = DragDropPermissionService.ClearShortcutRunAsFlags();
 
-            _elevationNoticeWindow = new ElevationNoticeWindow(LocalizationService, _startupElevationAssessment);
-            _elevationNoticeWindow.Closed += (_, _) => _elevationNoticeWindow = null;
-            ThemeService.TrackWindow(_elevationNoticeWindow);
+            var elevatedWindow = CreateTrackedElevationNoticeWindow();
+            _elevationNoticeWindow = elevatedWindow;
+            SubscribeWindowClosedOnce(elevatedWindow, () => { if (ReferenceEquals(_elevationNoticeWindow, elevatedWindow)) _elevationNoticeWindow = null; });
             _elevationNoticeWindow.Activate();
             Log("[Elevation] Notice shown for interactive elevated launch");
             return;
         }
 
         // Same-level elevated desktop (built-in Administrator / UAC off).
+        // Intra-widget, cross-widget, Desktop, and Explorer drags now run on
+        // the elevated pointer-drag engine, so never interrupt interactive
+        // startup with a modal window — use the one-time non-blocking toast /
+        // tray notification deep-linked to CompatibilityDiagnosticsSettings.
         if (_startupElevationAssessment.FullyElevatedAttribution == FullyElevatedSessionAttribution.None ||
             SettingsService.Settings.Core.FullyElevatedNoticeAcknowledgedUtcTicks is not null)
         {
             return;
         }
 
-        if (IsStartupMode)
-        {
-            ShowFullyElevatedNoticeToast();
-            return;
-        }
-
-        _elevationNoticeWindow = new ElevationNoticeWindow(LocalizationService, _startupElevationAssessment);
-        _elevationNoticeWindow.Closed += (_, _) => _elevationNoticeWindow = null;
-        ThemeService.TrackWindow(_elevationNoticeWindow);
-        _elevationNoticeWindow.Activate();
-        // Ack on show: the window being seen completes the notice's job.
-        MarkFullyElevatedNoticeAcknowledged();
-        Log("[Elevation] Fully-elevated informed notice shown for interactive launch");
+        ShowFullyElevatedNoticeToast();
+#endif
     }
 
     /// <summary>
@@ -5254,14 +5825,20 @@ public partial class App : Application
         bool shown = ShowSettingsNotification(
             "Tray.FullyElevatedNotice.Title",
             "Tray.FullyElevatedNotice.Message",
-            NotificationIcon.Info,
-            "CompatibilityDiagnosticsSettings");
+            TrayBalloonIconKind.Info,
+            "Maintenance");
         if (shown)
         {
             MarkFullyElevatedNoticeAcknowledged();
         }
 
         Log($"[Elevation] Fully-elevated toast shown={shown}");
+    }
+
+    private ElevationNoticeWindow CreateTrackedElevationNoticeWindow()
+    {
+        EnsureXamlLoopLifelineIfNoOtherWindows();
+        return new ElevationNoticeWindow(LocalizationService, _startupElevationAssessment, ThemeService);
     }
 
     private void MarkFullyElevatedNoticeAcknowledged()
@@ -5310,8 +5887,9 @@ public partial class App : Application
             return;
         }
 
-        _elevationNoticeWindow = new ElevationNoticeWindow(LocalizationService, _startupElevationAssessment);
-        _elevationNoticeWindow.Closed += (_, _) => _elevationNoticeWindow = null;
+        var shellNoticeWindow = CreateTrackedElevationNoticeWindow();
+        _elevationNoticeWindow = shellNoticeWindow;
+        SubscribeWindowClosedOnce(shellNoticeWindow, () => { if (ReferenceEquals(_elevationNoticeWindow, shellNoticeWindow)) _elevationNoticeWindow = null; });
         ThemeService.TrackWindow(_elevationNoticeWindow);
         _elevationNoticeWindow.Activate();
         Log("[Elevation] Notice shown for shell-above-app tray failure");
@@ -5326,16 +5904,22 @@ public partial class App : Application
         bool shouldRestartIntro = _onboardingWindow is not null;
         if (_onboardingWindow is null)
         {
-            _onboardingWindow = new OnboardingWindow(
+            EnsureXamlLoopLifelineIfNoOtherWindows();
+            var onboarding = new OnboardingWindow(
                 SettingsService,
                 LocalizationService,
-                initialStep);
-            _onboardingWindow.Closed += (_, _) =>
+                initialStep,
+                widgetManager: WidgetManager,
+                desktopShortcutService: ManagedStorageDesktopShortcutService,
+                showDesktopOrganization: () => ShowDesktopOrganizationWindow(),
+                searchHotkeyProvider: () => SearchHotkeyService);
+            _onboardingWindow = onboarding;
+            SubscribeWindowClosedOnce(onboarding, () =>
             {
-                _onboardingWindow = null;
-                ScheduleLightMemoryCleanup();
+                if (ReferenceEquals(_onboardingWindow, onboarding)) _onboardingWindow = null;
+                ScheduleLightMemoryCleanup(completedHeavyOperation: true);
                 ScheduleBackgroundMemoryCleanup("onboarding-closed");
-            };
+            });
             ThemeService.TrackWindow(_onboardingWindow);
         }
 
@@ -5353,6 +5937,9 @@ public partial class App : Application
     private static int s_backgroundMemoryCleanupGeneration;
     private static CancellationTokenSource?
         s_backgroundMemoryCleanupCancellationSource;
+    internal static bool IsBackgroundMemoryCleanupArmed =>
+        Volatile.Read(ref s_backgroundMemoryCleanupCancellationSource) is
+        { IsCancellationRequested: false };
     private static long s_memoryCleanupEpoch;
 
     /// <summary>
@@ -5417,9 +6004,21 @@ public partial class App : Application
             DateTimeOffset.UtcNow,
             visibleIdleCleanupEnabled &&
             MemoryCleanupPolicy.IsVisibleIdleCandidate(activity));
-        ScheduleVisibleIdleMemoryMaintenance(
-            TimeSpan.FromSeconds(VisibleIdleMemoryCheckIntervalSeconds));
+        if (activity.HasVisibleWidgets)
+        {
+            ScheduleVisibleIdleMemoryMaintenance(
+                GetVisibleIdleMaintenanceScheduleDelay(performance));
+        }
+        else
+        {
+            _visibleIdleMemoryMaintenanceTimer.Stop();
+        }
     }
+
+    private static TimeSpan GetVisibleIdleMaintenanceScheduleDelay(
+        EffectivePerformanceSettings performance) =>
+        TimeSpan.FromSeconds(
+            Math.Max(15, performance.VisibleIdleCacheCleanupDelaySeconds));
 
     private void ScheduleVisibleIdleMemoryMaintenance(TimeSpan delay)
     {
@@ -5443,10 +6042,13 @@ public partial class App : Application
             return;
         }
 
+        bool shouldRescheduleForVisibleSession = false;
+        EffectivePerformanceSettings? nextPerformance = null;
         try
         {
             EffectivePerformanceSettings performance =
                 PerformanceSettingsPolicy.Resolve(SettingsService.Settings);
+            nextPerformance = performance;
             if (!ConfigureVisibleIdleMemoryTracker(performance))
             {
                 return;
@@ -5455,6 +6057,7 @@ public partial class App : Application
             int visibleIdleDelaySeconds =
                 performance.VisibleIdleCacheCleanupDelaySeconds;
             var activity = CaptureMemoryCleanupActivity();
+            shouldRescheduleForVisibleSession = activity.HasVisibleWidgets;
             bool isVisibleIdleCandidate =
                 MemoryCleanupPolicy.IsVisibleIdleCandidate(activity);
             DateTimeOffset maintenanceDueAt = DateTimeOffset.UtcNow;
@@ -5465,58 +6068,58 @@ public partial class App : Application
                 return;
             }
 
-            using var process = Process.GetCurrentProcess();
-            process.Refresh();
-            long workingSetBefore = process.WorkingSet64;
-            long privateBytesBefore = process.PrivateMemorySize64;
+            _ = Win32Helper.TryGetCurrentProcessMemoryBytes(
+                out long workingSetBefore,
+                out long privateBytesBefore);
 
             Localized.PruneDeadTargets();
+            WidgetTextShadow.CompactTrackedReferences();
+            LocalizationService?.TrimInactiveLocaleDictionaries();
+            CitySearchService.ReleaseIdleCache(force: false);
+            TodoWidgetStore.ClearSnapshotCache();
+            CustomWidgetDataStore.TrimInMemoryPayloads();
+            DeskBox.Services.Lyrics.LocalFileLyricsProvider.TrimIdleDirectoryIndex();
+            WidgetManager?.ReleaseIdleWidgetDetachPlacementPreview();
+            WidgetManager?.RunLongHiddenNoRebuildMaintenance();
+            if (string.Equals(
+                    performance.HiddenCacheCleanupScope,
+                    PerformanceSettingsPolicy.HiddenCacheCleanupScopeAllRecreatable,
+                    StringComparison.Ordinal))
+            {
+                WidgetManager?.ReleaseLongHiddenInactiveContent();
+            }
+            else
+            {
+                WidgetManager?.HibernateIdleNonPresentingGroupViews();
+            }
+
             IconHelper.IdleIconCacheReleaseResult cacheRelease =
                 IconHelper.ReleaseIdleCaches(
                     TimeSpan.FromSeconds(Math.Max(1, visibleIdleDelaySeconds)));
-            process.Refresh();
+            _ = Win32Helper.TryGetCurrentProcessMemoryBytes(
+                out long workingSetAfter,
+                out long privateBytesAfter);
             _visibleIdleMemoryTracker.CommitMaintenance(
                 DateTimeOffset.UtcNow);
-
-            // Pre-1.4.5 visible-idle trim, restored with its original bloat
-            // thresholds: only while the user is fully away (the idle contract
-            // above) and only when both footprints are genuinely large, so an
-            // idle desktop neither pays constant trim/fault churn nor jitters
-            // an ambient animation from back-faults.
-            bool visibleIdleTrimmed = false;
-            if (SettingsService.Settings.IdleWorkingSetTrimEnabled)
+            if (cacheRelease.ReleasedAnything)
             {
-                MemoryCleanupActivitySnapshot trimActivity =
-                    CaptureMemoryCleanupActivity();
-                process.Refresh();
-                if (MemoryCleanupPolicy.ShouldTrimVisibleIdleWorkingSet(
-                        trimActivity,
-                        process.WorkingSet64,
-                        process.PrivateMemorySize64))
-                {
-                    visibleIdleTrimmed = Win32Helper.TrimWorkingSet();
-                    CompleteWorkingSetTrim(visibleIdleTrimmed, "visible-idle");
-                    if (visibleIdleTrimmed)
-                    {
-                        process.Refresh();
-                    }
-                }
+                NoteQuiescenceWorkingSetTrimActivity();
             }
 
             Log(
                 $"[Memory] Visible idle maintenance completed idleSeconds={visibleIdleDelaySeconds} " +
-                $"workingSetTrimmed={visibleIdleTrimmed} " +
+                $"workingSetTrimmed=false " +
                 $"workingSetBeforeMB={workingSetBefore / (1024.0 * 1024):F1} " +
-                $"workingSetAfterMB={process.WorkingSet64 / (1024.0 * 1024):F1} " +
+                $"workingSetAfterMB={workingSetAfter / (1024.0 * 1024):F1} " +
                 $"privateBeforeMB={privateBytesBefore / (1024.0 * 1024):F1} " +
-                $"privateAfterMB={process.PrivateMemorySize64 / (1024.0 * 1024):F1} " +
+                $"privateAfterMB={privateBytesAfter / (1024.0 * 1024):F1} " +
                 $"forcedCollection=false warmCachePreserved=true " +
                 $"releasedThumbs={cacheRelease.ReleasedThumbnails} " +
                 $"releasedBitmaps={cacheRelease.ReleasedDecodedBitmaps} " +
                 $"releasedIconBytes={cacheRelease.ReleasedIconByteEntries} " +
                 $"releasedEstimatedMB={cacheRelease.ReleasedEstimatedBytes / (1024.0 * 1024):F1} " +
                 $"interactiveCacheTrim={cacheRelease.ReleasedAnything} " +
-                $"reason=visible-ux-preservation");
+                $"reason=visible-idle-cache-release");
         }
         catch (Exception ex)
         {
@@ -5526,11 +6129,15 @@ public partial class App : Application
         {
             Interlocked.Exchange(ref _visibleIdleMemoryMaintenanceRunning, 0);
             if (_visibleIdleMemoryMaintenanceTimer is not null &&
-                ConfigureVisibleIdleMemoryTracker(
-                    PerformanceSettingsPolicy.Resolve(SettingsService.Settings)))
+                shouldRescheduleForVisibleSession)
             {
-                ScheduleVisibleIdleMemoryMaintenance(
-                    TimeSpan.FromSeconds(VisibleIdleMemoryCheckIntervalSeconds));
+                EffectivePerformanceSettings effective =
+                    nextPerformance ?? PerformanceSettingsPolicy.Resolve(SettingsService.Settings);
+                if (ConfigureVisibleIdleMemoryTracker(effective))
+                {
+                    ScheduleVisibleIdleMemoryMaintenance(
+                        GetVisibleIdleMaintenanceScheduleDelay(effective));
+                }
             }
         }
     }
@@ -5576,16 +6183,17 @@ public partial class App : Application
         bool isDeskBoxForeground =
             foregroundWindow != IntPtr.Zero &&
             Win32Helper.IsWindowVisible(foregroundWindow) &&
-            IsDeskBoxWindow(foregroundWindow);
+            IsInProcessDeskBoxWindow(foregroundWindow);
         bool isPointerOverDeskBox =
             Win32Helper.GetCursorPos(out var cursor) &&
-            IsDeskBoxWindow(Win32Helper.WindowFromPoint(cursor));
+            IsInProcessDeskBoxWindow(Win32Helper.WindowFromPoint(cursor));
         return new MemoryCleanupActivitySnapshot(
             HasVisibleWidgets: visibility.HasNativeVisibleWidgets,
             IsWidgetInteractionActive: widgetManager?.IsWidgetInteractionActive == true,
-            IsSettingsOpen: IsSettingsHostVisible,
+            IsSettingsOpen: IsSettingsHostBlockingMemoryCleanup || GetVisibleSettingsWindowHandle() != IntPtr.Zero,
             IsOnboardingOpen: _onboardingWindow is not null,
-            IsSearchPopupVisible: _searchPopupWindow?.IsPopupVisible == true,
+            IsSearchPopupVisible: _searchPopupWindow?.IsBlockingMemoryCleanup == true ||
+                                  _clipboardQuickPasteWindow?.IsPopupVisible == true,
             IsDeskBoxForeground: isDeskBoxForeground,
             IsPointerOverDeskBox: isPointerOverDeskBox,
             IsDesktopOrganizationOpen: _desktopOrganizationWindow is not null);
@@ -5611,6 +6219,7 @@ public partial class App : Application
     internal static void CancelBackgroundMemoryCleanup(string reason = "activity")
     {
         CancelBackgroundMemoryCleanupDelay();
+        Win32Helper.TrySetCurrentProcessMemoryPriority(lowPriority: false);
         Current._immediateHiddenWorkingSetTrimTracker.CancelPending();
 
         int generation = Interlocked.Increment(
@@ -5629,27 +6238,48 @@ public partial class App : Application
             PerformanceSettingsPolicy.Resolve(app.SettingsService.Settings);
         IconHelper.ConfigurePerformanceCacheBudget(performance.CacheBudget);
         app._visibleIdleMemoryTracker.Reset();
-        if (app.ConfigureVisibleIdleMemoryTracker(performance))
+        if (app.ConfigureVisibleIdleMemoryTracker(performance) &&
+            app.WidgetManager?.HasVisibleWidgets == true)
         {
             app.ScheduleVisibleIdleMemoryMaintenance(
-                TimeSpan.FromSeconds(VisibleIdleMemoryCheckIntervalSeconds));
+                GetVisibleIdleMaintenanceScheduleDelay(performance));
         }
         else
         {
             app._visibleIdleMemoryMaintenanceTimer?.Stop();
         }
+        app.RequestQuiescenceScheduleReconcile();
         if (app.WidgetManager is null ||
             app.WidgetManager
                 .CaptureMemoryCleanupVisibilitySnapshot()
                 .HasNativeVisibleWidgets ||
-            app._settingsWindow is { IsVisibleToUser: true } ||
+            app.IsSettingsHostBlockingMemoryCleanup ||
+            app.GetVisibleSettingsWindowHandle() != IntPtr.Zero ||
             app._onboardingWindow is not null ||
-            app._searchPopupWindow?.IsPopupVisible == true)
+            app._searchPopupWindow?.IsBlockingMemoryCleanup == true ||
+            app._clipboardQuickPasteWindow?.IsPopupVisible == true)
         {
             return;
         }
 
         ScheduleBackgroundMemoryCleanup("performance-settings-changed");
+    }
+
+    private void RequestQuiescenceScheduleReconcile()
+    {
+        if (UiDispatcherQueue is null)
+        {
+            return;
+        }
+
+        if (UiDispatcherQueue.HasThreadAccess)
+        {
+            ReconcileQuiescenceWorkingSetTrimSchedule();
+        }
+        else
+        {
+            UiDispatcherQueue.TryEnqueue(ReconcileQuiescenceWorkingSetTrimSchedule);
+        }
     }
 
     internal static void NotifyMemoryCleanupActivity()
@@ -5658,16 +6288,43 @@ public partial class App : Application
         {
             app._visibleIdleMemoryTracker.Reset();
             app.NoteQuiescenceWorkingSetTrimActivity();
+            if (app._visibleIdleMemoryMaintenanceTimer is { IsRunning: false } &&
+                app.WidgetManager?.HasVisibleWidgets == true &&
+                UiDispatcherQueue?.HasThreadAccess == true)
+            {
+                EffectivePerformanceSettings perf =
+                    PerformanceSettingsPolicy.Resolve(app.SettingsService.Settings);
+                if (app.ConfigureVisibleIdleMemoryTracker(perf))
+                {
+                    app._visibleIdleMemoryTracker.Observe(
+                        DateTimeOffset.UtcNow,
+                        MemoryCleanupPolicy.IsVisibleIdleCandidate(
+                            app.CaptureMemoryCleanupActivity()));
+                    app.ScheduleVisibleIdleMemoryMaintenance(
+                        GetVisibleIdleMaintenanceScheduleDelay(perf));
+                }
+            }
         }
     }
 
     internal bool CanRunCompactExpansionWarmup =>
-        _settingsWindow is not { IsVisibleToUser: true } &&
+        !IsSettingsHostVisible && GetVisibleSettingsWindowHandle() == IntPtr.Zero &&
+        !IsStudioHostVisible && GetStudioHostWindowHandle() == IntPtr.Zero &&
         _onboardingWindow is null &&
-        _searchPopupWindow?.IsPopupVisible != true &&
+        _searchPopupWindow?.IsBlockingMemoryCleanup != true &&
+        _clipboardQuickPasteWindow?.IsPopupVisible != true &&
         WidgetManager?.IsWidgetInteractionActive != true;
 
     internal bool CanRunCriticalCompactExpansionWarmup => true;
+
+    internal bool IsResourceSaverPerformanceMode =>
+        string.Equals(
+            PerformanceSettingsPolicy.Resolve(SettingsService.Settings).Mode,
+            PerformanceSettingsPolicy.ModeResourceSaver,
+            StringComparison.Ordinal);
+
+    internal bool AllowBackgroundCompactExpansionWarmup =>
+        !IsResourceSaverPerformanceMode;
 
     private readonly record struct MemoryCleanupDiagnosticSnapshot(
         long WorkingSetBytes,
@@ -5719,14 +6376,15 @@ public partial class App : Application
     {
         try
         {
-            using Process process = Process.GetCurrentProcess();
-            process.Refresh();
+            _ = Win32Helper.TryGetCurrentProcessMemoryBytes(
+                out long workingSetBytes,
+                out long privateBytes);
             WidgetMemoryVisibilitySnapshot visibility =
                 Current.WidgetManager?
                     .CaptureMemoryCleanupVisibilitySnapshot() ?? default;
             return new MemoryCleanupDiagnosticSnapshot(
-                process.WorkingSet64,
-                process.PrivateMemorySize64,
+                workingSetBytes,
+                privateBytes,
                 GC.GetGCMemoryInfo().HeapSizeBytes,
                 PerformanceLogger.ThumbnailCacheCount,
                 PerformanceLogger.ThumbnailEstimatedBytes,
@@ -5760,8 +6418,16 @@ public partial class App : Application
         MemoryCleanupDiagnosticSnapshot before,
         BackgroundMemoryCleanupOutcomeState state)
     {
-        MemoryCleanupDiagnosticSnapshot after =
-            CaptureMemoryCleanupDiagnosticSnapshot();
+        bool transientCancelled = state.CompletedStages == BackgroundMemoryCleanupStage.None &&
+            string.Equals(state.Status, "cancelled", StringComparison.Ordinal) &&
+            Stopwatch.GetElapsedTime(scheduledTimestamp) < TimeSpan.FromSeconds(2);
+        bool notArmed = state.CompletedStages == BackgroundMemoryCleanupStage.None &&
+            string.Equals(state.Status, "not-armed", StringComparison.Ordinal);
+        bool skipAfterResample = transientCancelled || notArmed ||
+            string.Equals(state.Status, "disabled", StringComparison.Ordinal);
+        MemoryCleanupDiagnosticSnapshot after = skipAfterResample
+            ? before
+            : CaptureMemoryCleanupDiagnosticSnapshot();
         MemoryCleanupActivitySnapshot activity =
             Current.CaptureMemoryCleanupActivity();
         string details =
@@ -5835,7 +6501,8 @@ public partial class App : Application
             $"desktopOrganizationOpen={activity.IsDesktopOrganizationOpen} " +
             $"deskBoxForegroundVisible={activity.IsDeskBoxForeground} " +
             $"pointerOverDeskBox={activity.IsPointerOverDeskBox}";
-        Log($"[Memory] Background cleanup outcome {details}");
+        if (transientCancelled || notArmed) LogVerbose($"[Memory] Background cleanup outcome {details}");
+        else Log($"[Memory] Background cleanup outcome {details}");
         PerformanceLogger.Mark("BackgroundMemoryCleanupOutcome", details);
     }
 
@@ -5845,6 +6512,7 @@ public partial class App : Application
         if (IsShuttingDown) return;
         CancelBackgroundMemoryCleanupDelay();
         App app = Current;
+        app.RequestQuiescenceScheduleReconcile();
         EffectivePerformanceSettings performance =
             PerformanceSettingsPolicy.Resolve(app.SettingsService.Settings);
         int generation = Interlocked.Increment(
@@ -6298,7 +6966,7 @@ public partial class App : Application
             return false;
         }
 
-        if (IsSettingsHostVisible)
+        if (IsSettingsHostBlockingMemoryCleanup || GetVisibleSettingsWindowHandle() != IntPtr.Zero)
         {
             blockReason = "settings-open";
             return false;
@@ -6316,9 +6984,15 @@ public partial class App : Application
             return false;
         }
 
-        if (_searchPopupWindow?.IsPopupVisible == true)
+        if (_searchPopupWindow?.IsBlockingMemoryCleanup == true)
         {
             blockReason = "search-popup-visible";
+            return false;
+        }
+
+        if (_clipboardQuickPasteWindow?.IsPopupVisible == true)
+        {
+            blockReason = "clipboard-popup-visible";
             return false;
         }
 
@@ -6387,6 +7061,31 @@ public partial class App : Application
         long managedHeapBefore = GC.GetGCMemoryInfo().HeapSizeBytes;
 
         Localized.PruneDeadTargets();
+        WidgetTextShadow.CompactTrackedReferences();
+        LocalizationService?.TrimInactiveLocaleDictionaries();
+        CitySearchService.ReleaseIdleCache(force: true);
+        TodoWidgetStore.ClearSnapshotCache();
+        CustomWidgetDataStore.TrimInMemoryPayloads();
+        DeskBox.Services.Lyrics.LocalFileLyricsProvider.ClearDirectoryIndexCache();
+        if (UiDispatcherQueue.HasThreadAccess)
+        {
+            WidgetSharedImageSourceCache.Clear();
+            Views.WidgetWindowBase.TrimAllIdleSharedBackdropControllers();
+        }
+        else
+        {
+            UiDispatcherQueue.TryEnqueue(() =>
+            {
+                if (CanRunBackgroundMemoryCleanup())
+                {
+                    WidgetSharedImageSourceCache.Clear();
+                    Views.WidgetWindowBase.TrimAllIdleSharedBackdropControllers();
+                }
+            });
+        }
+        WidgetManager?.ReleaseIdleWidgetDetachPlacementPreview();
+        ShellContextMenuProxy.ShutdownIdleServerIfInactive();
+        Win32Helper.TrySetCurrentProcessMemoryPriority(lowPriority: true);
         IconHelper.IdleIconCacheReleaseResult cacheRelease =
             string.Equals(
                 cleanupScope,
@@ -6465,6 +7164,33 @@ public partial class App : Application
             return false;
         }
 
+        LongHiddenWidgetResourceReleaseResult preCollectRelease =
+            WidgetManager?.ReleaseLongHiddenInactiveContent() ?? default;
+        state.ReleasedCachedContentCount += preCollectRelease.CachedContentCount;
+        if (preCollectRelease.CachedContentCount > 0 ||
+            preCollectRelease.EvictedHostCount > 0)
+        {
+            await Task.Yield();
+        }
+
+        return await RunBackgroundDeepMemoryCleanupCoreAsync(
+            generation,
+            triggerReason,
+            state);
+    }
+
+    private async Task<bool> RunBackgroundDeepMemoryCleanupCoreAsync(
+        int generation,
+        string triggerReason,
+        BackgroundMemoryCleanupOutcomeState state)
+    {
+        if (generation !=
+                Volatile.Read(ref s_backgroundMemoryCleanupGeneration) ||
+            !CanRunBackgroundMemoryCleanup())
+        {
+            return false;
+        }
+
         MemoryCleanupDiagnosticSnapshot before =
             CaptureMemoryCleanupDiagnosticSnapshot();
         MemoryReclaimResult reclaimResult = await Task.Run(
@@ -6484,16 +7210,13 @@ public partial class App : Application
         // state lazily when they come back.
         bool workingSetTrimmed = false;
         if (reclaimResult.Executed &&
-            SettingsService.Settings.IdleWorkingSetTrimEnabled &&
-            !(SettingsService.Settings.ImmediateHiddenWorkingSetTrimEnabled &&
-              _immediateHiddenWorkingSetTrimTracker.TrimmedCurrentHiddenSession))
+            SettingsService.Settings.Performance.IdleWorkingSetTrimEnabled)
         {
             workingSetTrimmed = Win32Helper.TrimWorkingSet();
             CompleteWorkingSetTrim(workingSetTrimmed, triggerReason);
         }
 
-        MemoryCleanupDiagnosticSnapshot after =
-            CaptureMemoryCleanupDiagnosticSnapshot();
+        MemoryCleanupDiagnosticSnapshot after = CaptureMemoryCleanupDiagnosticSnapshot();
         Log(
             $"[Memory] Deep finalizer cleanup completed " +
             $"status={reclaimResult.Status} " +
@@ -6587,9 +7310,8 @@ public partial class App : Application
             requiredGeneration !=
                 Volatile.Read(ref s_backgroundMemoryCleanupGeneration))
         {
-            PerformanceLogger.Mark(
-                "DeepMemoryReclaimSkipped",
-                $"reason=background-generation-changed trigger={reason}");
+            PerformanceLogger.Mark("DeepMemoryReclaimSkipped", $"reason=background-generation-changed trigger={reason}");
+            ClearPendingHeavyOperationDeepCleanup();
             return;
         }
 
@@ -6598,9 +7320,8 @@ public partial class App : Application
             LogVerbose(
                 $"[Memory] Deep finalizer cleanup deferred " +
                 $"reason={reason} blockedBy={blockReason}");
-            PerformanceLogger.Mark(
-                "DeepMemoryReclaimDeferred",
-                $"reason={reason} blockedBy={blockReason}");
+            PerformanceLogger.Mark("DeepMemoryReclaimDeferred", $"reason={reason} blockedBy={blockReason}");
+            ScheduleHeavyOperationDeepMemoryCleanupRetry(reason, requiredBackgroundGeneration, blockReason);
             return;
         }
 
@@ -6608,13 +7329,17 @@ public partial class App : Application
             CaptureMemoryCleanupDiagnosticSnapshot();
         MemoryReclaimResult reclaimResult = await Task.Run(
             () => MemoryReclaimer.TryCollect($"heavy-operation:{reason}"));
+        if (reclaimResult.Status is MemoryReclaimStatus.SkippedCooldown or MemoryReclaimStatus.SkippedInProgress)
+        {
+            ScheduleHeavyOperationDeepMemoryCleanupRetry(reason, requiredBackgroundGeneration, reclaimResult.Detail, reclaimResult.Status == MemoryReclaimStatus.SkippedCooldown);
+            return;
+        }
+        ClearPendingHeavyOperationDeepCleanup();
         if (generation != Volatile.Read(ref s_lightMemoryCleanupGeneration))
         {
             return;
         }
-
-        MemoryCleanupDiagnosticSnapshot after =
-            CaptureMemoryCleanupDiagnosticSnapshot();
+        MemoryCleanupDiagnosticSnapshot after = CaptureMemoryCleanupDiagnosticSnapshot();
         Log(
             $"[Memory] Heavy-operation deep cleanup completed " +
             $"status={reclaimResult.Status} " +
@@ -6642,6 +7367,7 @@ public partial class App : Application
         int? requiredBackgroundGeneration = null)
     {
         if (IsShuttingDown) return;
+        if (completedHeavyOperation) MarkPendingHeavyOperationDeepCleanup();
         int generation = Interlocked.Increment(ref s_lightMemoryCleanupGeneration);
         App app = Current;
         var dispatcherQueue = App.UiDispatcherQueue;
@@ -6665,7 +7391,7 @@ public partial class App : Application
                     return;
                 }
 
-                if (completedHeavyOperation)
+                if (completedHeavyOperation || HasPendingHeavyOperationDeepCleanup)
                 {
                     await app.RunHeavyOperationDeepMemoryCleanupAsync(
                         generation,
@@ -6674,6 +7400,9 @@ public partial class App : Application
                 }
 
                 Localized.PruneDeadTargets();
+                WidgetTextShadow.CompactTrackedReferences();
+                app.LocalizationService?.TrimInactiveLocaleDictionaries();
+                CitySearchService.ReleaseIdleCache(force: false);
                 PerformanceLogger.SampleMemory("light-cleanup-completed");
                 LogVerbose(
                     "[Memory] Delayed maintenance completed " +
@@ -6750,6 +7479,11 @@ public partial class App : Application
         // Recorded first so a death anywhere inside teardown still reads as
         // an intentional exit on the next launch (storm-guard semantics).
         _startupSessionLedger?.MarkCleanExit();
+        // Intentional app exit (tray quit, updater, restart) must not let
+        // Windows ARSO re-launch DeskBox on next sign-in. OS reboot/logoff
+        // bypasses this path via WM_QUERYENDSESSION/WM_ENDSESSION so ARSO stays
+        // armed when AutoStart is enabled.
+        UnregisterApplicationRestartForCleanExit();
         bool dependentTeardownCompleted = true;
         try
         {
@@ -6773,8 +7507,8 @@ public partial class App : Application
                     // close the tray dispatcher host so the process can exit.
                     Log("[Shutdown] Dependent teardown skipped after a deadline.");
                 }
-                _trayWindow?.Close();
-                _trayWindow = null;
+                CloseTrayAndLifelineForShutdown();
+
             }
             catch (Exception ex) { Log($"[Shutdown] Tray window close failed: {ex}"); }
             finally
@@ -6848,8 +7582,9 @@ public partial class App : Application
             ShutdownStep.Sync("backup-subscriptions", () =>
             {
                 SettingsService.SettingsChanged -= OnBackupSettingsChanged;
-                CloudBackupService.BackupRunCompleted -= OnCloudBackupRunCompleted;
-                DataBackupService.AutomaticSnapshotFallbackDetected -= OnAutomaticBackupFallbackDetected;
+                SettingsService.SettingsChanged -= OnClipboardFeatureSettingsChanged;
+                if (_cloudBackupService is { } cloud) cloud.BackupRunCompleted -= OnCloudBackupRunCompleted;
+                if (_dataBackupService is { } dataBackup) dataBackup.AutomaticSnapshotFallbackDetected -= OnAutomaticBackupFallbackDetected;
             }),
             // The backup and quick-capture steps deliberately do NOT abort on
             // deadline: their hung work is IO-only against non-disposable
@@ -6858,9 +7593,9 @@ public partial class App : Application
             // and arm the hard-exit watchdog for no benefit.
             ShutdownStep.Bounded("backup-restore-actions", async () =>
             {
-                if (_settingsWindow is not null)
+                if (HasInProcessSettingsWindow)
                 {
-                    await _settingsWindow.StopCloudBackupActionsAsync();
+                    await StopInProcessSettingsCloudBackupActionsAsync();
                     return;
                 }
                 // No settings window was ever opened: the process-level
@@ -6900,14 +7635,32 @@ public partial class App : Application
             }),
             // Observers stop before windows, so topology callbacks cannot
             // access partially closed surfaces. Each owner has its own step.
+            ShutdownStep.Sync("monitor-occlusion-tracker", () =>
+            {
+                if (_monitorOcclusionTracker is not null)
+                {
+                    _monitorOcclusionTracker.OccludedMonitorsChanged -= OnOccludedMonitorsChanged;
+                    _monitorOcclusionTracker.Dispose();
+                    _monitorOcclusionTracker = null;
+                }
+            }),
             ShutdownStep.Sync("display-watcher", () => { _displayAreaWatcher?.Dispose(); _displayAreaWatcher = null; }),
-            ShutdownStep.Sync("display-transition", () => { _displayTopologyTransitionCoordinator?.Dispose(); _displayTopologyTransitionCoordinator = null; }),
+            ShutdownStep.Sync("display-transition", () =>
+            {
+                _topologyGatePollTimer?.Stop();
+                _topologyGatePollTimer = null;
+                _displayTopologyTransitionCoordinator?.Dispose();
+                _displayTopologyTransitionCoordinator = null;
+            }),
             ShutdownStep.Sync("lifecycle-watcher", () => { _lifecycleRecoveryWatcher?.Dispose(); _lifecycleRecoveryWatcher = null; }),
             ShutdownStep.Sync("hook-watchdog", () => { _hookHealthWatchdog?.Dispose(); _hookHealthWatchdog = null; }),
             ShutdownStep.Sync("diagnostics", () => { _diagnosticsService?.Dispose(); _diagnosticsService = null; }),
             ShutdownStep.Bounded("quick-capture", () =>
-                _quickCaptureSettings?.StopAsync() ??
-                _quickCaptureClipboardRuntime?.StopAsync() ?? Task.CompletedTask,
+            {
+                    _quickCaptureWindowCoordinator?.CloseAll();
+                    _quickCaptureMirrorService?.Dispose();
+                    return _quickCaptureSettings?.StopAsync() ?? Task.CompletedTask;
+                },
                 shutdownGrace),
             ShutdownStep.Sync("desktop-organization-watcher", () =>
             {
@@ -6927,6 +7680,14 @@ public partial class App : Application
             {
                 _searchPopupWindow?.Close();
                 _searchPopupWindow = null;
+                _clipboardQuickPasteWindow?.Close();
+                _clipboardQuickPasteWindow = null;
+                if (_clipboardHotkeyService is { } clipHotkey)
+                {
+                    clipHotkey.RegistrationChanged -= OnSettingsIpcHotkeyRegistrationChanged;
+                    clipHotkey.Dispose();
+                    _clipboardHotkeyService = null;
+                }
             }),
             ShutdownStep.Bounded("search-settings", () =>
                 _searchSettings?.StopAsync() ?? Task.CompletedTask,
@@ -6942,15 +7703,27 @@ public partial class App : Application
             ShutdownStep.Bounded("feature-runtimes", () =>
                 _featureRuntimes?.DisposeAllAsync() ?? Task.CompletedTask,
                 shutdownGrace),
+            ShutdownStep.Bounded("clipboard-store", async () =>
+            {
+                if (_clipboardHistoryService is { } clipboardService)
+                {
+                    await clipboardService.FlushAsync();
+                    clipboardService.Dispose();
+                    _clipboardHistoryService = null;
+                }
+            }, shutdownGrace),
             // Hooks must be removed while their owning tray window still exists.
             ShutdownStep.Sync("global-hotkey", () => { GlobalHotkeyService?.Dispose(); GlobalHotkeyService = null; }),
             ShutdownStep.Sync("widgets", () => WidgetManager?.CloseAll()),
+            ShutdownStep.Sync("drag-toast-hud", () => DesktopToastHudService.Shared.Shutdown()),
             ShutdownStep.Sync("desktop-organization-window", () => { _desktopOrganizationWindow?.CloseForShutdown(); _desktopOrganizationWindow = null; }),
+            ShutdownStep.Sync("custom-widget-studio-window", () => { ShutdownStudioHost(); ShutdownStudioIpcServer(); }),
             ShutdownStep.Sync("settings-window", () =>
             {
-                _settingsWindow?.CloseForShutdown();
-                _settingsWindow = null;
+                CloseInProcessSettingsWindowForShutdown();
+                // In-process settings window (smoke harness) closed above.
                 ShutdownSettingsHost();
+                ShutdownSettingsIpcServer();
             }),
             ShutdownStep.Sync("backup-settings", () => _backupSettings?.Dispose()),
             ShutdownStep.Sync("onboarding-window", () => { _onboardingWindow?.Close(); _onboardingWindow = null; }),
@@ -6978,13 +7751,14 @@ public partial class App : Application
                 SettingsService.SettingsChanged -= OnMaterialCapabilitySettingsChanged;
                 LocalizationService.LanguageChanged -= OnLanguageChanged;
             }),
-            ShutdownStep.Sync("tray-icon", () => { _trayIcon?.Dispose(); _trayIcon = null; }),
+            ShutdownStep.Sync("tray-icon", () => { _trayHost?.Dispose(); _trayHost = null; }),
             ShutdownStep.Sync("activation-registration", () => { _activationRegistration?.Unregister(null); _activationRegistration = null; }),
             ShutdownStep.Sync("activation-event", () => { _activationEvent?.Dispose(); _activationEvent = null; }),
             // The currently registered disposables are synchronous; container
             // disposal stays on the UI thread for ThemeService's WinRT objects.
             ShutdownStep.Sync("service-container", () => Services.Dispose()),
             ShutdownStep.Sync("log-drain", DrainLogQueue),
+            ShutdownStep.Sync("channel-coexistence", DisposeChannelCoexistenceResources),
             ShutdownStep.Sync("single-instance", () =>
             {
                 try { _singleInstanceMutex?.ReleaseMutex(); }
@@ -7010,15 +7784,21 @@ public partial class App : Application
         }
     }
 
+    internal void ReportUnhandledUiCallbackException(string source, Exception exception)
+    {
+        Log($"Unhandled exception ({source}): {exception}");
+        if (!IsStartupLifelineEstablished)
+        {
+            FailStartup(
+                $"unhandled exception ({source}) before the startup lifeline was established",
+                exception);
+        }
+    }
+
     // ─── Search Services ─────────────────────────────────────────────
 
     private void EnsureSearchFeatureShell()
     {
-        if (!FeatureWidgetSettings.IsEnabled(SettingsService.Settings, WidgetKind.Search))
-        {
-            return;
-        }
-
         try
         {
             if (_searchHistoryService is null)
@@ -7033,9 +7813,10 @@ public partial class App : Application
                     SettingsService,
                     LocalizationService,
                     ToggleSearchPopupAsync);
-                if (_trayWindow is not null)
+                _searchHotkeyService.RegistrationChanged += OnSettingsIpcHotkeyRegistrationChanged;
+                if (TrayHostWindowHandle != IntPtr.Zero)
                 {
-                    var trayHwnd = WindowNative.GetWindowHandle(_trayWindow);
+                    var trayHwnd = TrayHostWindowHandle;
                     if (trayHwnd != IntPtr.Zero)
                     {
                         _searchHotkeyService.Attach(trayHwnd);
@@ -7047,7 +7828,11 @@ public partial class App : Application
         catch (Exception ex)
         {
             Log($"[Search] Lightweight service initialization failed: {ex}");
-            _searchHotkeyService?.Dispose();
+            if (_searchHotkeyService is { } failedHotkey)
+            {
+                failedHotkey.RegistrationChanged -= OnSettingsIpcHotkeyRegistrationChanged;
+                failedHotkey.Dispose();
+            }
             _searchHotkeyService = null;
             _searchHistoryService = null;
         }
@@ -7061,20 +7846,29 @@ public partial class App : Application
             return;
         }
 
-        if (_searchEngineService is not null)
+        if (_searchEngineService is not null &&
+            _everythingSearchService is not null &&
+            _searchActionService is not null)
         {
             return;
         }
 
         try
         {
-            _everythingSearchService = new EverythingSearchService(SettingsService);
-            _searchEngineService = new SearchEngineService(
+            _everythingSearchService ??= new EverythingSearchService(SettingsService);
+            _searchEngineService ??= new SearchEngineService(
                 SettingsService,
                 LocalizationService,
                 _everythingSearchService,
-                QuickCaptureService);
-            _searchActionService = new SearchResultActionService(SettingsService);
+                QuickCaptureService,
+                clipboardItemsProvider: GetClipboardItemsForSearchAsync,
+                frecencyBoostProvider: _searchHistoryService.GetFrecencyBoost);
+            _searchActionService ??= new SearchResultActionService(
+                SettingsService,
+                QuickCaptureService,
+                widgetId => WidgetManager is { } manager
+                    ? manager.RefreshTodoWidgetAsync(widgetId)
+                    : Task.CompletedTask);
 
             _searchSettings?.OnRuntimeChanged();
 
@@ -7096,34 +7890,246 @@ public partial class App : Application
             return null;
         }
 
-        if (!FeatureWidgetSettings.IsEnabled(SettingsService.Settings, WidgetKind.Search))
-        {
-            return null;
-        }
-
         EnsureSearchServices();
         return _searchEngineService;
     }
 
-    internal void SetSearchFeatureEnabled(bool enabled)
+    internal EverythingSearchService? EnsureEverythingSearchServiceForIpc()
+    {
+        EnsureSearchServices();
+        return _everythingSearchService;
+    }
+
+    internal ClipboardHistoryService? TryGetActiveClipboardHistoryService() =>
+        _clipboardHistoryService;
+
+    internal ClipboardHistoryService EnsureClipboardHistoryService()
+    {
+        if (_clipboardHistoryService is { } existing)
+        {
+            return existing;
+        }
+
+        var created = new ClipboardHistoryService(
+            new ClipboardStore(),
+            SettingsService,
+            message => Log(message),
+            QuickCaptureService);
+        created.DoubleCopyActionExecuted += OnClipboardDoubleCopyActionExecuted;
+        _clipboardHistoryService = created;
+        return created;
+    }
+
+    private void StartClipboardFeatureMonitoring()
+    {
+        EnsureClipboardHistoryService().StartMonitoring();
+        EnsureClipboardHotkeyService();
+    }
+
+    private void EnsureClipboardHotkeyService()
+    {
+        try
+        {
+            if (_clipboardHotkeyService is null)
+            {
+                _clipboardHotkeyService = new ClipboardHotkeyService(
+                    SettingsService,
+                    LocalizationService,
+                    ToggleClipboardQuickPastePopupAsync);
+                _clipboardHotkeyService.RegistrationChanged += OnSettingsIpcHotkeyRegistrationChanged;
+            }
+
+            if (TrayHostWindowHandle != IntPtr.Zero && !_clipboardHotkeyService.IsRegistered)
+            {
+                IntPtr trayHwnd = TrayHostWindowHandle;
+                if (trayHwnd != IntPtr.Zero)
+                {
+                    _clipboardHotkeyService.Attach(trayHwnd);
+                    Log("[Clipboard] Quick-paste hotkey service attached");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log($"[Clipboard] Quick-paste hotkey initialization failed: {ex.Message}");
+            if (_clipboardHotkeyService is { } failedHotkey)
+            {
+                failedHotkey.RegistrationChanged -= OnSettingsIpcHotkeyRegistrationChanged;
+                failedHotkey.Dispose();
+            }
+
+            _clipboardHotkeyService = null;
+        }
+    }
+
+    private Task ToggleClipboardQuickPastePopupAsync()
     {
         if (!UiDispatcherQueue.HasThreadAccess)
         {
-            UiDispatcherQueue.TryEnqueue(() => SetSearchFeatureEnabled(enabled));
+            UiDispatcherQueue.TryEnqueue(() => _ = ToggleClipboardQuickPastePopupAsync());
+            return Task.CompletedTask;
+        }
+
+        if (IsShuttingDown || !FeatureWidgetSettings.IsEnabled(SettingsService.Settings, WidgetKind.Clipboard))
+        {
+            return Task.CompletedTask;
+        }
+
+        CancelBackgroundMemoryCleanup();
+
+        if (_clipboardQuickPasteWindow is { IsClosed: true })
+        {
+            _clipboardQuickPasteWindow = null;
+        }
+
+        if (_clipboardQuickPasteWindow is null)
+        {
+            EnsureXamlLoopLifelineIfNoOtherWindows();
+            var clipboardService = EnsureClipboardHistoryService();
+            var popup = new ClipboardQuickPasteWindow(
+                clipboardService, SettingsService, LocalizationService, ThemeService, EnsureXamlLoopLifelineIfNoOtherWindows);
+            SubscribeWindowClosedOnce(popup, () =>
+            {
+                if (ReferenceEquals(_clipboardQuickPasteWindow, popup)) _clipboardQuickPasteWindow = null;
+                if (!IsShuttingDown) { ScheduleLightMemoryCleanup(); NotifyMemoryCleanupActivity(); ScheduleBackgroundMemoryCleanup("clipboard-popup-closed"); }
+            });
+            _clipboardQuickPasteWindow = popup;
+        }
+
+        return _clipboardQuickPasteWindow.TogglePopupAsync();
+    }
+
+    private void DisposeClipboardQuickPasteShell()
+    {
+        var popup = _clipboardQuickPasteWindow;
+        _clipboardQuickPasteWindow = null;
+        if (popup is not null && !IsShuttingDown)
+        {
+            EnsureXamlLoopLifelineIfNoOtherWindows();
+            try
+            {
+                popup.Close();
+            }
+            catch (Exception ex)
+            {
+                Log($"[Clipboard] Quick-paste popup close failed during cleanup: {ex.Message}");
+            }
+        }
+
+        if (_clipboardHotkeyService is { } hotkeyService)
+        {
+            hotkeyService.RegistrationChanged -= OnSettingsIpcHotkeyRegistrationChanged;
+            hotkeyService.Dispose();
+            _clipboardHotkeyService = null;
+        }
+    }
+
+    private void OnClipboardDoubleCopyActionExecuted(object? sender, ClipboardDoubleCopyEventArgs e)
+    {
+        if (IsShuttingDown)
+        {
             return;
         }
 
-        // The enable/disable cycle goes through the registered runtime lease;
-        // both transitions complete synchronously on the UI thread.
+        UiDispatcherQueue.TryEnqueue(() => SafeFireAndForget(async () =>
+        {
+            if (IsShuttingDown)
+            {
+                return;
+            }
+
+            if (string.Equals(e.ActionMode, ClipboardSettingsSlice.DoubleCopyQuickCapture, StringComparison.OrdinalIgnoreCase))
+            {
+                bool saved = await SaveClipboardHistoryItemToQuickCaptureAsync(e.Item);
+                if (saved)
+                {
+                    ShowClipboardWidgetFeedback(new WidgetFeedbackRequest(
+                        LocalizationService.T("Clipboard.Feedback.SavedToQuickCapture"), WidgetFeedbackSeverity.Success));
+                }
+            }
+            else if (string.Equals(e.ActionMode, ClipboardSettingsSlice.DoubleCopyPin, StringComparison.OrdinalIgnoreCase))
+            {
+                ShowClipboardWidgetFeedback(new WidgetFeedbackRequest(
+                    LocalizationService.T("Clipboard.Feedback.DoubleCopyPinned"), WidgetFeedbackSeverity.Success));
+            }
+        }, "clipboard-double-copy-action"));
+    }
+
+    private void ShowClipboardWidgetFeedback(WidgetFeedbackRequest feedback)
+    {
+        if (WidgetManager?.ContentWidgets.Values is not { } windows)
+        {
+            return;
+        }
+
+        foreach (ContentWidgetWindow window in windows)
+        {
+            if (window.Config.WidgetKind == WidgetKind.Clipboard)
+            {
+                window.ShowFeedback(feedback);
+            }
+        }
+    }
+
+    private void OnClipboardFeatureSettingsChanged()
+    {
+        if (IsShuttingDown)
+        {
+            return;
+        }
+
+        if (UiDispatcherQueue is { HasThreadAccess: false } dq)
+        {
+            dq.TryEnqueue(ReconcileClipboardFeatureRuntime);
+            return;
+        }
+
+        ReconcileClipboardFeatureRuntime();
+    }
+
+    private async ValueTask StopClipboardFeatureMonitoringAsync()
+    {
+        DisposeClipboardQuickPasteShell();
+        if (_clipboardHistoryService is not { } clipboardService)
+        {
+            return;
+        }
+
+        clipboardService.DoubleCopyActionExecuted -= OnClipboardDoubleCopyActionExecuted;
+        clipboardService.StopMonitoring();
+        if (IsShuttingDown)
+        {
+            // Shutdown's dedicated "clipboard-store" step awaits FlushAsync and disposes deterministically.
+            return;
+        }
+
+        _clipboardHistoryService = null;
+        try
+        {
+            await clipboardService.FlushAsync().ConfigureAwait(false);
+        }
+        finally
+        {
+            clipboardService.Dispose();
+        }
+    }
+
+    private void ReconcileClipboardFeatureRuntime()
+    {
+        if (IsShuttingDown || _clipboardFeatureRuntime is null)
+        {
+            return;
+        }
+
+        bool enabled = FeatureWidgetSettings.IsEnabled(SettingsService.Settings, WidgetKind.Clipboard);
         if (enabled)
         {
-            _ = _searchFeatureRuntime?.StartAsync();
-            PerformanceLogger.SampleMemory("search-enabled");
-            return;
+            _ = _clipboardFeatureRuntime.StartAsync();
         }
-
-        _ = _searchFeatureRuntime?.DisposeAsync();
-        PerformanceLogger.SampleMemory("search-disabled");
+        else
+        {
+            _ = _clipboardFeatureRuntime.DisposeAsync();
+        }
     }
 
     private void DisposeSearchServices()
@@ -7133,6 +8139,7 @@ public partial class App : Application
         _searchPopupWindow = null;
         if (popup is not null)
         {
+            EnsureXamlLoopLifelineIfNoOtherWindows();
             try
             {
                 popup.Close();
@@ -7145,7 +8152,11 @@ public partial class App : Application
 
         _fileMetaService?.Dispose();
         _fileMetaService = null;
-        _searchHotkeyService?.Dispose();
+        if (_searchHotkeyService is { } hotkeyService)
+        {
+            hotkeyService.RegistrationChanged -= OnSettingsIpcHotkeyRegistrationChanged;
+            hotkeyService.Dispose();
+        }
         _searchHotkeyService = null;
         _searchEngineService?.Dispose();
         _searchEngineService = null;
@@ -7155,256 +8166,6 @@ public partial class App : Application
         _searchSettings?.OnRuntimeChanged();
         Log("[Search] Services disposed");
         ScheduleLightMemoryCleanup(completedHeavyOperation: true);
-    }
-
-    private Task ToggleSearchPopupAsync()
-    {
-        if (!UiDispatcherQueue.HasThreadAccess)
-        {
-            UiDispatcherQueue.TryEnqueue(() => _ = ToggleSearchPopupAsync());
-            return Task.CompletedTask;
-        }
-
-        // If the search feature widget has been disabled by the user,
-        // the hotkey should not be able to invoke the popup either.
-        if (!FeatureWidgetSettings.IsEnabled(SettingsService.Settings, WidgetKind.Search))
-        {
-            Log("[Search] Popup toggle blocked: search feature widget is disabled");
-            return Task.CompletedTask;
-        }
-
-        if (_searchPopupWindow?.IsPopupVisible == true)
-        {
-            _searchPopupWindow.HidePopup();
-            return Task.CompletedTask;
-        }
-
-        OpenSearchPopupCore(initialQuery: null);
-        return Task.CompletedTask;
-    }
-
-    /// <summary>
-    /// Public entry point used by the search widget (and other direct UI callers).
-    /// Unlike the global hotkey, this is intentionally idempotent: queued repeat clicks
-    /// can only focus the popup and can never hide the window that the first click opened.
-    /// </summary>
-    public void OpenSearchPopup()
-    {
-        if (!UiDispatcherQueue.HasThreadAccess)
-        {
-            UiDispatcherQueue.TryEnqueue(OpenSearchPopup);
-            return;
-        }
-
-        OpenSearchPopupCore(initialQuery: null);
-    }
-
-    /// <summary>
-    /// Opens the search popup with a pre-filled query and immediately executes the search.
-    /// Used by search history items in the widget.
-    /// </summary>
-    public void OpenSearchPopupWithQuery(string query)
-    {
-        if (!UiDispatcherQueue.HasThreadAccess)
-        {
-            UiDispatcherQueue.TryEnqueue(() => OpenSearchPopupWithQuery(query));
-            return;
-        }
-
-        OpenSearchPopupCore(query);
-    }
-
-    private void OpenSearchPopupCore(string? initialQuery)
-    {
-        if (!FeatureWidgetSettings.IsEnabled(SettingsService.Settings, WidgetKind.Search))
-        {
-            return;
-        }
-
-        EnsureSearchServices();
-        if (_searchEngineService is null)
-        {
-            return;
-        }
-
-        CancelBackgroundMemoryCleanup();
-
-        if (_searchPopupWindow is null)
-        {
-            CreateSearchPopupWindow();
-        }
-
-        if (_searchPopupWindow is not { } popup)
-        {
-            return;
-        }
-
-        PerformanceLogger.Mark(
-            "SearchPopupOpenRequested",
-            $"shellReady=true visible={popup.IsPopupVisible} " +
-            $"everythingState={_everythingSearchService?.CurrentSnapshot.State}");
-
-        if (string.IsNullOrWhiteSpace(initialQuery))
-        {
-            popup.ShowPopup();
-        }
-        else
-        {
-            popup.ShowPopupWithQuery(initialQuery);
-        }
-
-        // Everything is queried only after the user types and has explicitly enabled it.
-    }
-
-    private IReadOnlyList<IntPtr> GetRaisedBandAuxiliaryWindowHandles()
-    {
-        List<IntPtr> handles = new(3);
-        if (_settingsWindow is { IsVisibleToUser: true } settings)
-        {
-            handles.Add(WindowNative.GetWindowHandle(settings));
-        }
-
-        if (_searchPopupWindow is { IsPopupVisible: true } popup)
-        {
-            handles.Add(popup.WindowHandle);
-        }
-
-        if (_desktopOrganizationWindow is { } organize)
-        {
-            handles.Add(organize.WindowHandle);
-        }
-
-        return handles;
-    }
-
-    private void CreateSearchPopupWindow()
-    {
-        if (_searchEngineService is null || _searchHistoryService is null)
-        {
-            return;
-        }
-
-        var stopwatch = Stopwatch.StartNew();
-        _fileMetaService?.Dispose();
-        _fileMetaService = new FileMetaService();
-        var viewModel = new ViewModels.SearchPopupViewModel(
-            _searchEngineService,
-            SettingsService,
-            LocalizationService,
-            _searchHistoryService,
-            _fileMetaService);
-        var popup = new SearchPopupWindow(viewModel, SettingsService, LocalizationService);
-        _searchPopupWindow = popup;
-        popup.ActionRequested += OnSearchActionRequested;
-        popup.ContentRequested += OnSearchContentRequested;
-        popup.PopupShown += (_, _) =>
-        {
-            CancelBackgroundMemoryCleanup();
-        };
-        popup.PopupHidden += (_, _) =>
-        {
-            ScheduleBackgroundMemoryCleanup("search-popup-hidden");
-        };
-        popup.Closed += (_, _) =>
-        {
-            if (ReferenceEquals(_searchPopupWindow, popup))
-            {
-                _searchPopupWindow = null;
-                Log("[Search] Popup shell discarded; next open will recreate it");
-            }
-
-            _fileMetaService?.Dispose();
-            _fileMetaService = null;
-            PerformanceLogger.SampleMemory("search-popup-closed");
-            // Closing a transient popup already detaches its visual tree. Do not
-            // promote that normal release into a compacting GC while visible
-            // widgets are still warm.
-            ScheduleLightMemoryCleanup();
-            ScheduleBackgroundMemoryCleanup("search-popup-closed");
-        };
-        viewModel.HidePopupCallback = () => popup.HidePopup();
-        stopwatch.Stop();
-        Log($"[Search] Popup shell created in {stopwatch.ElapsedMilliseconds} ms");
-        PerformanceLogger.SampleMemory("search-popup-created");
-    }
-
-    private void OnSearchActionRequested(object? sender, string actionId)
-    {
-        _ = HandleSearchActionAsync(actionId);
-    }
-
-    private void OnSearchContentRequested(object? sender, Models.SearchResultItem item)
-    {
-        _ = HandleSearchContentAsync(item);
-    }
-
-    private async Task HandleSearchContentAsync(Models.SearchResultItem item)
-    {
-        if (WidgetManager is null)
-        {
-            return;
-        }
-
-        switch (item.Kind)
-        {
-            case Models.SearchResultKind.Todo:
-                await WidgetManager.ShowTodoReminderTargetAsync(
-                    item.TodoWidgetId,
-                    item.TodoItemId,
-                    preferTodayFilter: false);
-                break;
-
-            case Models.SearchResultKind.QuickCapture:
-                var window = await WidgetManager.CreateOrShowQuickCaptureWidgetAsync();
-                await window.RevealItemAsync(item.QuickCaptureItemId);
-                break;
-        }
-    }
-
-    private async Task HandleSearchActionAsync(string actionId)
-    {
-        switch (actionId)
-        {
-            case "new-todo":
-                if (WidgetManager is not null)
-                {
-                    await WidgetManager.CreateTodoWidgetAsync(focusNewInput: true);
-                }
-                break;
-
-            case "new-note":
-                if (WidgetManager is not null)
-                {
-                    await WidgetManager.CreateOrShowQuickCaptureWidgetAsync(focusNewInput: true);
-                }
-                break;
-
-            case "open-settings":
-                ShowSettings("SearchSettings");
-                break;
-
-            case "toggle-widgets":
-                await ToggleTrayWidgetsAsync("action-command");
-                break;
-
-            case "toggle-theme":
-                ToggleTheme();
-                break;
-
-            case "open-todo":
-                if (WidgetManager is not null)
-                {
-                    await WidgetManager.CreateTodoWidgetAsync();
-                }
-                break;
-
-            case "open-quickcapture":
-                if (WidgetManager is not null)
-                {
-                    await WidgetManager.CreateOrShowQuickCaptureWidgetAsync();
-                }
-                break;
-        }
     }
 
     private void ToggleTheme()

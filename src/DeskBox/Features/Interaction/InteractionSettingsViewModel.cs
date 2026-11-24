@@ -39,12 +39,20 @@ public sealed partial class InteractionSettingsViewModel : ObservableObject
     // "Settings." resource prefix), and this editor file must stay
     // facade-access free. The canonical values double as the key suffixes.
     private const string LayerModeKeyPrefix = "Settings.WidgetLayer" + "Mode.";
+    private static readonly string[] ClickRaiseScopes =
+    [
+        DynamicClickRaiseScopes.Single,
+        DynamicClickRaiseScopes.Group
+    ];
+    private const string ClickRaiseScopeKeyPrefix = "Settings.ClickRaiseScope.";
 
     private readonly IInteractionSettings _settings;
     private readonly Func<string, string> _localize;
     private bool _isSyncingPresentation;
     private string[]? _cachedLayerModeNames;
+    private string[]? _cachedClickRaiseScopeNames;
     private string _layerMode = WidgetLayerModes.Dynamic;
+    private string _clickRaiseScope = DynamicClickRaiseScopes.Group;
     private string _fileOpenMethod = FileOpenMethods.SingleClick;
     private string _showDesktopBehavior = ShowDesktopBehaviors.HideWithWindows;
     private bool _fileItemContextMenuEnabled;
@@ -98,6 +106,11 @@ public sealed partial class InteractionSettingsViewModel : ObservableObject
         get => _layerMode;
         set
         {
+            if (string.IsNullOrEmpty(value))
+            {
+                return;
+            }
+
             // The combo only offers canonical values and the coordinator
             // normalizes writes, so the editor stores the raw selection and
             // re-syncs from the normalized snapshot on the next broadcast.
@@ -108,10 +121,12 @@ public sealed partial class InteractionSettingsViewModel : ObservableObject
 
             if (_isSyncingPresentation)
             {
+                OnPropertyChanged(nameof(IsDynamicLayerMode));
                 return;
             }
 
             _settings.SetWidgetLayerMode(value);
+            OnPropertyChanged(nameof(IsDynamicLayerMode));
             LayerModeUserChanged?.Invoke();
         }
     }
@@ -134,6 +149,52 @@ public sealed partial class InteractionSettingsViewModel : ObservableObject
         }
     }
 
+    public bool IsDynamicLayerMode =>
+        string.Equals(_layerMode, WidgetLayerModes.Dynamic, StringComparison.Ordinal);
+
+    public string ClickRaiseScope
+    {
+        get => _clickRaiseScope;
+        set
+        {
+            if (string.IsNullOrEmpty(value))
+            {
+                return;
+            }
+
+            if (!SetProperty(ref _clickRaiseScope, value))
+            {
+                return;
+            }
+
+            if (_isSyncingPresentation)
+            {
+                return;
+            }
+
+            _settings.SetDynamicClickRaiseScope(value);
+        }
+    }
+
+    public IReadOnlyList<SettingsOption> AvailableClickRaiseScopeOptions
+    {
+        get
+        {
+            _cachedClickRaiseScopeNames ??= ClickRaiseScopes
+                .Select(scope => _localize(ClickRaiseScopeKeyPrefix + scope))
+                .ToArray();
+            var options = new SettingsOption[ClickRaiseScopes.Length];
+            for (int index = 0; index < ClickRaiseScopes.Length; index++)
+            {
+                options[index] = new SettingsOption(
+                    ClickRaiseScopes[index],
+                    _cachedClickRaiseScopeNames[index]);
+            }
+
+            return options;
+        }
+    }
+
     /// <summary>Pushed by the shell: the hover-button state machine owns the summary.</summary>
     public string HoverButtonActionsSummary
     {
@@ -148,7 +209,7 @@ public sealed partial class InteractionSettingsViewModel : ObservableObject
         get => _fileOpenMethod;
         set
         {
-            if (!SetProperty(ref _fileOpenMethod, value))
+            if (string.IsNullOrEmpty(value) || !SetProperty(ref _fileOpenMethod, value))
             {
                 return;
             }
@@ -173,7 +234,7 @@ public sealed partial class InteractionSettingsViewModel : ObservableObject
         get => _showDesktopBehavior;
         set
         {
-            if (!SetProperty(ref _showDesktopBehavior, value))
+            if (string.IsNullOrEmpty(value) || !SetProperty(ref _showDesktopBehavior, value))
             {
                 return;
             }
@@ -310,6 +371,7 @@ public sealed partial class InteractionSettingsViewModel : ObservableObject
         try
         {
             LayerMode = snapshot.LayerMode;
+            ClickRaiseScope = snapshot.ClickRaiseScope;
             SnapEnabled = snapshot.SnapEnabled;
             SnapSpacing = snapshot.SnapSpacing;
             FileOpenMethod = snapshot.DoubleClickToOpen
@@ -333,9 +395,23 @@ public sealed partial class InteractionSettingsViewModel : ObservableObject
     public void RefreshLocalization()
     {
         _cachedLayerModeNames = null;
-        OnPropertyChanged(nameof(AvailableLayerModeOptions));
-        OnPropertyChanged(nameof(AvailableFileOpenMethodOptions));
-        OnPropertyChanged(nameof(AvailableShowDesktopBehaviorOptions));
+        _cachedClickRaiseScopeNames = null;
+        _isSyncingPresentation = true;
+        try
+        {
+            OnPropertyChanged(nameof(AvailableLayerModeOptions));
+            OnPropertyChanged(nameof(AvailableClickRaiseScopeOptions));
+            OnPropertyChanged(nameof(AvailableFileOpenMethodOptions));
+            OnPropertyChanged(nameof(AvailableShowDesktopBehaviorOptions));
+            OnPropertyChanged(nameof(LayerMode));
+            OnPropertyChanged(nameof(ClickRaiseScope));
+            OnPropertyChanged(nameof(FileOpenMethod));
+            OnPropertyChanged(nameof(ShowDesktopBehavior));
+        }
+        finally
+        {
+            _isSyncingPresentation = false;
+        }
     }
 
     /// <summary>

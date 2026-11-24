@@ -56,15 +56,16 @@ public static class ShellNewMenuHelper
     private static IReadOnlyList<ShellNewEntry>? _cachedEntries;
     private static long _cacheReadAt;
 
-    private static readonly HashSet<string> ExcludedExtensions =
-        new(StringComparer.OrdinalIgnoreCase)
-        {
+    private static readonly System.Collections.Frozen.FrozenSet<string> ExcludedExtensions =
+        System.Collections.Frozen.FrozenSet.ToFrozenSet(
+        [
             // Offered as a dedicated wizard entry sourced from the same key.
             ".lnk",
             // Folder-like or non-file registrations.
             ".library-ms",
             ".searchConnector-ms"
-        };
+        ],
+        StringComparer.OrdinalIgnoreCase);
 
     public static IReadOnlyList<ShellNewEntry> GetEntries()
     {
@@ -80,12 +81,6 @@ public static class ShellNewMenuHelper
         _cachedEntries = entries;
         _cacheReadAt = now;
         return entries;
-    }
-
-    internal static void InvalidateCacheForTests()
-    {
-        _cachedEntries = null;
-        _cacheReadAt = 0;
     }
 
     /// <summary>
@@ -534,12 +529,16 @@ public static class ShellNewMenuHelper
                 fileNameWithExtension,
                 FileAttributeNormal,
                 ref info,
-                (uint)Marshal.SizeOf<ShellIconNativeMethods.SHFILEINFO>(),
+                ShellIconNativeMethods.ShFileInfoSize,
                 ShellIconNativeMethods.SHGFI_USEFILEATTRIBUTES |
                 ShellIconNativeMethods.SHGFI_TYPENAME);
-            return result == IntPtr.Zero || string.IsNullOrWhiteSpace(info.szTypeName)
-                ? null
-                : info.szTypeName;
+            if (result == IntPtr.Zero)
+            {
+                return null;
+            }
+
+            string typeName = info.GetTypeName();
+            return string.IsNullOrWhiteSpace(typeName) ? null : typeName;
         }
         catch
         {

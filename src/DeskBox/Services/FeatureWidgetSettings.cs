@@ -149,8 +149,10 @@ public static class FeatureWidgetSettings
             // search-toggle collateral.
             WidgetKind.Music => HasLiveWidget(settings, WidgetKind.Music),
             WidgetKind.Weather => HasLiveWidget(settings, WidgetKind.Weather),
-            WidgetKind.Search => HasLiveWidget(settings, WidgetKind.Search),
             WidgetKind.Glance => HasLiveWidget(settings, WidgetKind.Glance),
+            WidgetKind.Custom => HasLiveWidget(settings, WidgetKind.Custom),
+            WidgetKind.Clipboard => HasLiveWidget(settings, WidgetKind.Clipboard) ||
+                (IsEnabled(settings, WidgetKind.QuickCapture) && settings.QuickCapture.QuickCaptureClipboardEnabled),
             WidgetKind.SystemProxy => HasLiveWidget(settings, WidgetKind.SystemProxy),
             _ => false
         };

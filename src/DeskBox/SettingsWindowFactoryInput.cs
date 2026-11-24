@@ -82,7 +82,6 @@ internal sealed record SettingsWindowFactoryInput(
                 Format,
                 message => App.Log(message),
                 ex => ReportError("[QuickCapture] Settings operation failed:", ex)),
-            SearchSettings,
             BackupCommands,
             new DeskBox.Features.Appearance.AppearanceSettingsViewModel(AppearanceSettings, T),
             new DeskBox.Features.Capsule.CapsuleSettingsViewModel(CapsuleSettings, T, Format),

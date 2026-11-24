@@ -13,10 +13,13 @@ namespace DeskBox.Tests;
 public sealed class SettingsSearchChannelPolicyTests
 {
     [Fact]
-    public void DirectOnlyHeaderKeys_AreFrozenAtTheTwoChannelGatedCards()
+    public void DirectOnlyHeaderKeys_AreFrozenAtTheChannelGatedCards()
     {
-        Assert.Equal(2, SettingsSearchChannelPolicy.DirectOnlyHeaderKeys.Count);
-        Assert.Contains("Settings.AutoStart.Mode.Title", SettingsSearchChannelPolicy.DirectOnlyHeaderKeys);
+        Assert.Equal(4, SettingsSearchChannelPolicy.DirectOnlyHeaderKeys.Count);
+        Assert.DoesNotContain("Settings.AutoStart.Mode.Title", SettingsSearchChannelPolicy.DirectOnlyHeaderKeys);
+        Assert.Contains("Settings.Update.AutoCheck", SettingsSearchChannelPolicy.DirectOnlyHeaderKeys);
+        Assert.Contains("Settings.Update.AutoDownload", SettingsSearchChannelPolicy.DirectOnlyHeaderKeys);
+        Assert.Contains("Settings.Update.ShowUpdateToast", SettingsSearchChannelPolicy.DirectOnlyHeaderKeys);
         Assert.Contains("Settings.About.StoreSupportTitle", SettingsSearchChannelPolicy.DirectOnlyHeaderKeys);
     }
 
@@ -37,9 +40,23 @@ public sealed class SettingsSearchChannelPolicyTests
             Assert.True(SettingsSearchChannelPolicy.IsHiddenInStore(headerKey));
         }
 
-        // Every other catalog entry stays searchable in both channels.
+        // Every other catalog entry stays searchable in Store builds.
         Assert.DoesNotContain(SettingsSearchCatalog.Entries, entry =>
             !SettingsSearchChannelPolicy.DirectOnlyHeaderKeys.Contains(entry.HeaderKey) &&
             SettingsSearchChannelPolicy.IsHiddenInStore(entry.HeaderKey));
+    }
+
+    [Fact]
+    public void StoreOnlyHeaderKeys_AreHiddenInDirectBuildsAndSearchableInStoreBuilds()
+    {
+        Assert.Contains("Settings.Backup.StoreUninstallDataNotice.Title", SettingsSearchChannelPolicy.StoreOnlyHeaderKeys);
+        Assert.All(SettingsSearchChannelPolicy.StoreOnlyHeaderKeys, headerKey =>
+        {
+            Assert.Contains(SettingsSearchCatalog.Entries, entry =>
+                string.Equals(entry.HeaderKey, headerKey, StringComparison.Ordinal));
+            Assert.True(SettingsSearchChannelPolicy.IsHiddenInDirect(headerKey));
+            Assert.True(SettingsSearchChannelPolicy.IsHiddenForChannel(headerKey, isStoreBuild: false));
+            Assert.False(SettingsSearchChannelPolicy.IsHiddenForChannel(headerKey, isStoreBuild: true));
+        });
     }
 }

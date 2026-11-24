@@ -1,4 +1,4 @@
-﻿namespace DeskBox.Services;
+namespace DeskBox.Services;
 
 using System.Threading;
 using DeskBox.Contracts;
@@ -20,7 +20,7 @@ public sealed class InProcessSettingsWidgetActions : ISettingsWidgetActions
 
     private readonly Func<bool, Task>? _applyQuickCaptureEnabled;
     private readonly Func<bool, Task>? _applyTodoEnabled;
-    private readonly Func<bool, Task>? _applySearchEnabled;
+    private readonly Action<string?, string?>? _openCustomWidgetStudio;
 
     public InProcessSettingsWidgetActions(
         WidgetManager? widgetManager,
@@ -30,11 +30,11 @@ public sealed class InProcessSettingsWidgetActions : ISettingsWidgetActions
         LocalizationService localizationService,
         Func<bool, Task>? applyQuickCaptureEnabled = null,
         Func<bool, Task>? applyTodoEnabled = null,
-        Func<bool, Task>? applySearchEnabled = null)
+        Action<string?, string?>? openCustomWidgetStudio = null)
     {
         _applyQuickCaptureEnabled = applyQuickCaptureEnabled;
         _applyTodoEnabled = applyTodoEnabled;
-        _applySearchEnabled = applySearchEnabled;
+        _openCustomWidgetStudio = openCustomWidgetStudio;
         _widgetManager = widgetManager;
         _settingsService = settingsService;
         _fileService = fileService;
@@ -69,6 +69,11 @@ public sealed class InProcessSettingsWidgetActions : ISettingsWidgetActions
             if (group is not null)
             {
                 groupFound = true;
+                if (!string.IsNullOrWhiteSpace(change.Name))
+                {
+                    group.Name = change.Name.Trim();
+                }
+
                 if (change.NavigationStyle is not null)
                 {
                     group.NavigationStyle = change.NavigationStyle;
@@ -182,6 +187,12 @@ public sealed class InProcessSettingsWidgetActions : ISettingsWidgetActions
             {
                 _settingsService.Settings.WidgetDisplayDisconnectBehavior = change.DisconnectBehavior;
             }
+
+            if (change.DisplayScalingMode is not null)
+            {
+                _settingsService.Settings.WidgetLayout.WidgetDisplayScalingMode =
+                    SettingsService.NormalizeWidgetDisplayScalingMode(change.DisplayScalingMode);
+            }
         });
 
         _settingsService.SaveDebounced(notifySubscribers: false);
@@ -230,6 +241,53 @@ public sealed class InProcessSettingsWidgetActions : ISettingsWidgetActions
     public async Task ClearPerWidgetBackgrounds()
     {
         await DeskBox.Platform.UiDispatch.RunAsync(ClearPerWidgetBackgroundsOnUi);
+    }
+
+    public async Task ResetWidgetChromeOverrides(bool interactive)
+    {
+        await DeskBox.Platform.UiDispatch.RunAsync(() => ResetWidgetChromeOverridesOnUi(interactive));
+    }
+
+    private Task ResetWidgetChromeOverridesOnUi(bool interactive)
+    {
+        WidgetChromeCategory targetCategory = interactive
+            ? WidgetChromeCategory.Interactive
+            : WidgetChromeCategory.Display;
+        var factory = new WidgetContentFactory(_localizationService);
+        int changed = 0;
+        _settingsService.MutateGraphUnderLock(() =>
+        {
+            foreach (WidgetConfig widget in _settingsService.Settings.WidgetLayout.Widgets)
+            {
+                WidgetContentDescriptor descriptor;
+                try
+                {
+                    descriptor = factory.GetDescriptor(widget.WidgetKind);
+                }
+                catch (NotSupportedException)
+                {
+                    continue;
+                }
+
+                if (descriptor.ChromeCategory != targetCategory ||
+                    widget.Metadata is null ||
+                    !widget.Metadata.ContainsKey(WidgetChromeModeNames.MetadataKey))
+                {
+                    continue;
+                }
+
+                WidgetChromeModeNames.SetOverrideMode(widget, WidgetChromeMode.System);
+                changed++;
+            }
+        });
+
+        if (changed > 0)
+        {
+            _settingsService.RequestAppearancePreview();
+            _settingsService.SaveDebounced(notifySubscribers: true);
+        }
+
+        return Task.CompletedTask;
     }
 
     private Task<int> ClearPerWidgetBackgroundsOnUi()
@@ -328,14 +386,6 @@ public sealed class InProcessSettingsWidgetActions : ISettingsWidgetActions
                 }
 
                 break;
-            case WidgetKind.Search:
-                if (_applySearchEnabled is { } applySearch)
-                {
-                    await applySearch(enabled);
-                    return;
-                }
-
-                break;
         }
 
         // Deep review R13 (病 A): the dictionary write is a graph mutation —
@@ -374,6 +424,7 @@ public sealed class InProcessSettingsWidgetActions : ISettingsWidgetActions
         // marshals for exactly this reason.
         DeskBox.Platform.UiDispatch.RunOrDefer(
             () => _widgetManager?.NotifyWidgetGroupPresentationSettingsChanged());
+
 
     public Task<bool> ReorderWidgetGroupMemberAsync(string sourceWidgetId, string targetWidgetId) =>
         _widgetManager is { } manager
@@ -425,6 +476,27 @@ public sealed class InProcessSettingsWidgetActions : ISettingsWidgetActions
             ? manager.UpdateDefaultManagedStorageRootAsync(newRootPath, options)
             : Task.FromResult(new ManagedStorageMigrationResult(0, string.Empty, newRootPath, 0, 0, false));
 
+    public Task<ManagedStorageMigrationResult?> TrySwitchEmptyManagedStorageRootAsync(
+        string newRootPath,
+        CancellationToken token) =>
+        _widgetManager is { } manager
+            ? manager.TrySwitchEmptyManagedStorageRootAsync(newRootPath, token)
+            : Task.FromResult<ManagedStorageMigrationResult?>(null);
+
+    public Task<ManagedStorageMigrationCleanupResult> RetryManagedStorageSourceCleanupAsync(
+        string newRootPath,
+        CancellationToken token) =>
+        _widgetManager is { } manager
+            ? manager.RetryManagedStorageSourceCleanupAsync(newRootPath, token)
+            : Task.FromResult(new ManagedStorageMigrationCleanupResult(0, 0, 0, false));
+
+    public Task<ManagedStorageMigrationCleanupResult> CleanupInterruptedMigrationCopiesAsync(
+        string newRootPath,
+        CancellationToken token) =>
+        _widgetManager is { } manager
+            ? manager.CleanupInterruptedMigrationCopiesAsync(newRootPath, token)
+            : Task.FromResult(new ManagedStorageMigrationCleanupResult(0, 0, 0, false));
+
     public IReadOnlyList<GlanceWidgetInstanceInfo> GetGlanceWidgetInstances() =>
         _widgetManager?.GetGlanceWidgetInstances() ?? [];
 
@@ -433,7 +505,8 @@ public sealed class InProcessSettingsWidgetActions : ISettingsWidgetActions
     public Task<GlanceWidgetInstanceInfo> CreateGlanceWidgetAsync(string? sourceWidgetId) =>
         _widgetManager is { } manager
             ? manager.CreateGlanceWidgetAsync(sourceWidgetId)
-            : Task.FromResult(new GlanceWidgetInstanceInfo(string.Empty, string.Empty, false));
+            : Task.FromException<GlanceWidgetInstanceInfo>(
+                new InvalidOperationException("WidgetManager is not initialized."));
 
     public Task SetGlanceWidgetInstanceEnabledAsync(string widgetId, bool enabled) =>
         _widgetManager is { } manager
@@ -455,6 +528,67 @@ public sealed class InProcessSettingsWidgetActions : ISettingsWidgetActions
             ? manager.RenameWidgetAsync(widgetId, newName)
             : Task.CompletedTask;
 
+    public Task<IReadOnlyList<GlanceWidgetInstanceInfo>> GetCustomWidgetInstancesAsync() =>
+        Task.FromResult<IReadOnlyList<GlanceWidgetInstanceInfo>>(
+            _widgetManager?.GetCustomWidgetInstances() ?? []);
+
+    public Task<GlanceWidgetInstanceInfo> CreateCustomWidgetAsync(string? templateOrPackageSpec) =>
+        _widgetManager is { } manager
+            ? manager.CreateCustomWidgetAsync(templateOrPackageSpec)
+            : Task.FromException<GlanceWidgetInstanceInfo>(
+                new InvalidOperationException("WidgetManager is not initialized."));
+
+    public Task<GlanceWidgetInstanceInfo> CreateCustomWidgetWithSetupAsync(Contracts.CustomWidgetCreateOptions options) =>
+        _widgetManager is { } manager
+            ? manager.CreateCustomWidgetAsync(
+                options.Spec,
+                initialSettings: options.InitialSettings,
+                initialSecrets: options.InitialSecrets)
+            : Task.FromException<GlanceWidgetInstanceInfo>(
+                new InvalidOperationException("WidgetManager is not initialized."));
+
+    public Task ApplyCustomWidgetMutationAsync(Contracts.CustomWidgetSettingsMutation mutation) =>
+        _widgetManager is { } manager
+            ? manager.ApplyCustomWidgetMutationAsync(mutation)
+            : Task.CompletedTask;
+
+    public Task SetCustomWidgetInstanceEnabledAsync(string widgetId, bool enabled) =>
+        _widgetManager is { } manager
+            ? manager.SetCustomWidgetInstanceEnabledAsync(widgetId, enabled)
+            : Task.CompletedTask;
+
+    public Task<bool> LocateCustomWidgetAsync(string widgetId) =>
+        _widgetManager is { } manager
+            ? manager.LocateCustomWidgetAsync(widgetId)
+            : Task.FromResult(false);
+
+    public async Task OpenCustomWidgetStudioAsync(string? widgetId, string? initialIdea)
+    {
+        if (_openCustomWidgetStudio is not { } openStudio)
+        {
+            return;
+        }
+
+        await DeskBox.Platform.UiDispatch.RunAsync(() =>
+        {
+            try
+            {
+                openStudio(widgetId, initialIdea);
+            }
+            catch (Exception ex)
+            {
+                App.Log($"[SettingsWidgetActions] Open widget studio failed: {ex.Message}");
+            }
+
+            return Task.CompletedTask;
+        });
+    }
+
+    public Task RemoveCustomWidgetAsync(string widgetId) =>
+        _widgetManager is { } manager
+            ? manager.RemoveCustomWidgetAsync(widgetId)
+            : Task.CompletedTask;
+
     public Task<(int MovedCount, WidgetMoveAllUndoToken Token)> MoveAllWidgetSurfacesToDisplayAsync(
         string displayStableId) =>
         _widgetManager is { } manager
@@ -465,6 +599,11 @@ public sealed class InProcessSettingsWidgetActions : ISettingsWidgetActions
         _widgetManager is { } manager
             ? manager.UndoMoveAllWidgetSurfacesAsync(token)
             : Task.FromResult(false);
+
+    public Task<int> RecalibrateDisplayLayoutAsync() =>
+        _widgetManager is { } manager
+            ? DeskBox.Platform.UiDispatch.RunAsync(manager.RecalibrateDisplayLayoutAsync)
+            : Task.FromResult(0);
 
     public Task ApplyScreenBindingAsync(
         string widgetId,

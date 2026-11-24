@@ -21,7 +21,7 @@ public interface ISettingsMigration
 public sealed class SettingsMigrationPipeline
 {
     /// <summary>The current schema version that the application expects.</summary>
-    public const int CurrentSchemaVersion = 15;
+    public const int CurrentSchemaVersion = 18;
 
     private readonly List<ISettingsMigration> _migrations = [];
 
@@ -43,6 +43,9 @@ public sealed class SettingsMigrationPipeline
         _migrations.Add(new Migration_12_To_13());
         _migrations.Add(new Migration_13_To_14());
         _migrations.Add(new Migration_14_To_15());
+        _migrations.Add(new Migration_15_To_16());
+        _migrations.Add(new Migration_16_To_17());
+        _migrations.Add(new Migration_17_To_18());
     }
 
     /// <summary>
@@ -52,15 +55,15 @@ public sealed class SettingsMigrationPipeline
     internal SettingsMigrationPipeline(IEnumerable<ISettingsMigration> migrations)
     {
         _migrations.AddRange(migrations);
+        _migrations.Sort(static (left, right) => left.FromVersion.CompareTo(right.FromVersion));
     }
 
     /// <summary>
     /// Runs all necessary migrations to bring the settings from their current
     /// schema version up to <see cref="CurrentSchemaVersion"/>. Runs
-    /// copy-on-write: every step executes on a deserialized copy of the last
-    /// committed state and a failed step is discarded wholesale, so the
-    /// returned graph is either fully migrated through its recorded
-    /// checkpoint or byte-for-byte the input. The caller replaces its
+    /// copy-on-write: clones the input graph once on entry and only captures
+    /// pre-step checkpoint bytes before mutating steps, deserializing a
+    /// rollback checkpoint solely when a step throws. The caller replaces its
     /// settings reference with the returned one.
     /// </summary>
     public (AppSettings Settings, bool AnyApplied) RunMigrationsOnCopy(AppSettings settings)
@@ -70,11 +73,27 @@ public sealed class SettingsMigrationPipeline
             return (settings, false);
         }
 
-        AppSettings working = settings;
+        byte[]? lastCheckpointSnapshot = TrySerializeSettings(settings);
+        if (lastCheckpointSnapshot is null)
+        {
+            App.Log(
+                $"[SettingsMigration] Migration from version {settings.SchemaVersion} skipped: " +
+                "the pre-step settings snapshot could not be taken.");
+            return (settings, false);
+        }
+
+        if (TryDeserializeSettings(lastCheckpointSnapshot) is not { } working)
+        {
+            App.Log(
+                $"[SettingsMigration] Migration from version {settings.SchemaVersion} skipped: " +
+                "the pre-step settings snapshot could not be read back.");
+            return (settings, false);
+        }
+
         int version = settings.SchemaVersion;
         bool anyApplied = false;
 
-        foreach (var migration in _migrations.OrderBy(m => m.FromVersion))
+        foreach (ISettingsMigration migration in _migrations)
         {
             if (migration.FromVersion != version)
             {
@@ -86,50 +105,55 @@ public sealed class SettingsMigrationPipeline
                 break;
             }
 
-            byte[]? snapshot = TrySerializeSettings(working);
-            if (snapshot is null)
-            {
-                App.Log(
-                    $"[SettingsMigration] Migration from version {migration.FromVersion} skipped: " +
-                    "the pre-step settings snapshot could not be taken.");
-                break;
-            }
+            bool isVersionAdvanceOnly = migration is Migration_9_To_10
+                or Migration_10_To_11
+                or Migration_14_To_15
+                or Migration_17_To_18;
 
-            if (TryDeserializeSettings(snapshot) is not { } stepCopy)
+            if (anyApplied && !isVersionAdvanceOnly)
             {
-                App.Log(
-                    $"[SettingsMigration] Migration from version {migration.FromVersion} skipped: " +
-                    "the pre-step settings snapshot could not be read back.");
-                break;
+                lastCheckpointSnapshot = TrySerializeSettings(working);
+                if (lastCheckpointSnapshot is null)
+                {
+                    App.Log(
+                        $"[SettingsMigration] Migration from version {migration.FromVersion} skipped: " +
+                        "the pre-step settings snapshot could not be taken.");
+                    break;
+                }
             }
 
             try
             {
-                migration.Migrate(stepCopy);
+                migration.Migrate(working);
             }
             catch (Exception ex)
             {
-                // A failed step must stop the chain and leave the graph
-                // untouched: every later migration assumes the schema the
-                // failed step was supposed to produce, and the discarded copy
-                // carries no half-applied mutations.
+                // A failed step must stop the chain and restore the last
+                // committed checkpoint so half-applied mutations never leak.
                 App.Log(
                     $"[SettingsMigration] Migration from version {migration.FromVersion} failed: {ex.Message}; " +
                     $"state untouched, stopping at schema version {version} (will retry on next launch)");
+                working = anyApplied
+                    ? (TryDeserializeSettings(lastCheckpointSnapshot!) ?? settings)
+                    : settings;
                 break;
             }
 
-            working = stepCopy;
             version = migration.FromVersion + 1;
             anyApplied = true;
             App.Log($"[SettingsMigration] Applied migration from version {migration.FromVersion} to {version}");
+        }
+
+        if (!anyApplied)
+        {
+            return (settings, false);
         }
 
         // Record the checkpoint the chain actually reached. A partial run
         // keeps the last successful version so the failed step retries next
         // launch; only a full pass reaches CurrentSchemaVersion.
         working.SchemaVersion = version;
-        return (working, anyApplied);
+        return (working, true);
     }
 
     private static byte[]? TrySerializeSettings(AppSettings settings)
@@ -727,6 +751,157 @@ internal sealed class Migration_13_To_14 : ISettingsMigration
 internal sealed class Migration_14_To_15 : ISettingsMigration
 {
     public int FromVersion => 14;
+
+    public void Migrate(AppSettings settings)
+    {
+    }
+}
+
+/// <summary>
+/// v16 adds ClipboardViewMode (Standard/Compact), preserves explicit v1.5.9
+/// image-clipboard opt-outs, and upgrades v1.5.9 drag-out defaults safely
+/// without clobbering conservative Copy overrides or Windows 10 FollowWindows profiles.
+/// </summary>
+internal sealed class Migration_15_To_16 : ISettingsMigration
+{
+    public int FromVersion => 15;
+
+    public void Migrate(AppSettings settings)
+    {
+        if (string.IsNullOrWhiteSpace(settings.Clipboard.ClipboardViewMode))
+        {
+            settings.Clipboard.ClipboardViewMode = ClipboardSettingsSlice.ViewModeStandard;
+        }
+
+        // Preserve explicit v1.5.x image-clipboard opt-out when upgrading legacy QuickCapture clipboard users.
+        if (settings.QuickCapture.QuickCaptureClipboardEnabled &&
+            !settings.QuickCapture.QuickCaptureImageClipboardEnabled &&
+            !(settings.WidgetLayout.FeatureWidgetEnabledStates?.ContainsKey(nameof(WidgetKind.Clipboard)) ?? false))
+        {
+            settings.Clipboard.ClipboardCaptureImages = false;
+        }
+
+        UpgradeLegacyDragOutAction(
+            settings.FileWidget,
+            WindowsCompatibilityService.IsWindows11OrLater);
+    }
+
+    internal static void UpgradeLegacyDragOutAction(
+        FileWidgetSettingsSlice fileWidget,
+        bool isWindows11OrLater)
+    {
+        if (string.IsNullOrWhiteSpace(fileWidget.ManagedDragOutAction) ||
+            (!string.Equals(fileWidget.ManagedDragOutAction, SettingsService.ManagedDragOutActionMove, StringComparison.Ordinal) &&
+             !string.Equals(fileWidget.ManagedDragOutAction, SettingsService.ManagedDragOutActionCopy, StringComparison.Ordinal) &&
+             !string.Equals(fileWidget.ManagedDragOutAction, SettingsService.ManagedDragOutActionFollowWindows, StringComparison.Ordinal)))
+        {
+            fileWidget.ManagedDragOutAction = SettingsService.ManagedDragOutActionMove;
+            return;
+        }
+
+        // In v1.5.9 the out-of-the-box pair was (Drop=Move, DragOut=FollowWindows).
+        // On Windows 11, OLE supports Copy|Move with Move preferred for Explorer
+        // and automatic Copy fallback for third-party apps, so smoothly align the
+        // v1.5.9 default pair to Move. Never overwrite explicit Copy choices on
+        // any OS, and never flip Windows 10 FollowWindows users into single-bit
+        // Move mode on upgrade.
+        if (isWindows11OrLater &&
+            string.Equals(fileWidget.ManagedDropAction, SettingsService.ManagedDropActionMove, StringComparison.Ordinal) &&
+            string.Equals(fileWidget.ManagedDragOutAction, SettingsService.ManagedDragOutActionFollowWindows, StringComparison.Ordinal))
+        {
+            fileWidget.ManagedDragOutAction = SettingsService.ManagedDragOutActionMove;
+        }
+    }
+}
+
+/// <summary>
+/// v17 adds the global Clipboard quick-paste shortcut, popup placement mode,
+/// and optional double-Ctrl+C quick action.
+/// </summary>
+internal sealed class Migration_16_To_17 : ISettingsMigration
+{
+    public int FromVersion => 16;
+
+    public void Migrate(AppSettings settings)
+    {
+        ClipboardSettingsSlice clipboard = settings.Clipboard;
+        HotkeyActivationKind kind = Enum.IsDefined(clipboard.ClipboardHotkeyActivationKind)
+            ? clipboard.ClipboardHotkeyActivationKind
+            : HotkeyActivationKind.Chord;
+        int modifiers = (int)((HotkeyModifierKeys)clipboard.ClipboardHotkeyModifiers &
+            (HotkeyModifierKeys.Alt |
+             HotkeyModifierKeys.Control |
+             HotkeyModifierKeys.Shift |
+             HotkeyModifierKeys.Windows));
+
+        GlobalHotkeyActivation clipboardActivation = GlobalHotkeyService.NormalizeActivation(
+            kind,
+            modifiers,
+            clipboard.ClipboardHotkeyKey);
+        if (!GlobalHotkeyService.IsValidActivation(clipboardActivation))
+        {
+            clipboardActivation = GlobalHotkeyActivation.FromChord(new GlobalHotkeyGesture(
+                HotkeyModifierKeys.Alt,
+                ClipboardSettingsSlice.DefaultHotkeyKey));
+        }
+
+        clipboard.ClipboardHotkeyActivationKind = clipboardActivation.Kind;
+        clipboard.ClipboardHotkeyModifiers = (int)clipboardActivation.Gesture.Modifiers;
+        clipboard.ClipboardHotkeyKey = clipboardActivation.Gesture.VirtualKey;
+
+        if (clipboard.ClipboardHotkeyEnabled)
+        {
+            bool conflictsWithExisting = false;
+            if (settings.Core.GlobalHotkeyEnabled)
+            {
+                GlobalHotkeyActivation globalActivation = GlobalHotkeyService.NormalizeActivation(
+                    settings.Core.GlobalHotkeyActivationKind,
+                    settings.Core.GlobalHotkeyModifiers,
+                    settings.Core.GlobalHotkeyKey);
+                if (GlobalHotkeyService.DoActivationsConflict(clipboardActivation, globalActivation))
+                {
+                    conflictsWithExisting = true;
+                }
+            }
+
+            if (!conflictsWithExisting && settings.Search.SearchHotkeyEnabled)
+            {
+                GlobalHotkeyActivation searchActivation = GlobalHotkeyService.NormalizeActivation(
+                    settings.Search.SearchHotkeyActivationKind,
+                    settings.Search.SearchHotkeyModifiers,
+                    settings.Search.SearchHotkeyKey);
+                if (GlobalHotkeyService.DoActivationsConflict(clipboardActivation, searchActivation))
+                {
+                    conflictsWithExisting = true;
+                }
+            }
+
+            if (conflictsWithExisting)
+            {
+                clipboard.ClipboardHotkeyEnabled = false;
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(clipboard.ClipboardPopupPlacementMode))
+        {
+            clipboard.ClipboardPopupPlacementMode = ClipboardSettingsSlice.PopupFollowCaret;
+        }
+
+        if (string.IsNullOrWhiteSpace(clipboard.ClipboardDoubleCopyAction))
+        {
+            clipboard.ClipboardDoubleCopyAction = ClipboardSettingsSlice.DoubleCopyNone;
+        }
+    }
+}
+
+/// <summary>
+/// Schema v18 advances the version checkpoint for 1.6.0 capsule warm-cache
+/// settings (KeepCapsuleContentWarm already defaults to true on fresh and
+/// upgraded v1.5.9 profiles).
+/// </summary>
+internal sealed class Migration_17_To_18 : ISettingsMigration
+{
+    public int FromVersion => 17;
 
     public void Migrate(AppSettings settings)
     {
