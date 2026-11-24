@@ -321,7 +321,8 @@ public enum WidgetKind
     Custom,
 
     /// <summary>First-party clipboard history and snippet shelf widget.</summary>
-    Clipboard
+    Clipboard,
+
     /// <summary>Card that flips the Windows manual system-proxy (WinINet) switch.</summary>
     SystemProxy
 }
