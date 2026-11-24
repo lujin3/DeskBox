@@ -26,7 +26,7 @@ public sealed class ManagedStorageSettingsCoordinator : IManagedStorageSettings
         FileWidgetSettingsSlice fileWidget = _settings.Settings.FileWidget;
         return new ManagedStoragePresentationSettings(
             NormalizeDropAction(fileWidget.ManagedDropAction),
-            NormalizeDragOutAction(fileWidget.ManagedDragOutAction),
+            NormalizeDropAction(fileWidget.ManagedDragOutAction),
             fileWidget.DragOutModifierTipEnabled,
             fileWidget.DragOutResultHintEnabled,
             SettingsService.NormalizeManagedStorageRootPath(
@@ -50,15 +50,21 @@ public sealed class ManagedStorageSettingsCoordinator : IManagedStorageSettings
         ThrowIfStopped();
         string normalized = NormalizeDropAction(action);
         FileWidgetSettingsSlice fileWidget = _settings.Settings.FileWidget;
-        if (string.Equals(
-                fileWidget.ManagedDropAction,
-                normalized,
-                StringComparison.Ordinal))
+        bool dropSame = string.Equals(
+            fileWidget.ManagedDropAction,
+            normalized,
+            StringComparison.Ordinal);
+        bool dragOutSame = string.Equals(
+            fileWidget.ManagedDragOutAction,
+            normalized,
+            StringComparison.Ordinal);
+        if (dropSame && dragOutSame)
         {
             return false;
         }
 
         fileWidget.ManagedDropAction = normalized;
+        fileWidget.ManagedDragOutAction = normalized;
         _settings.SaveDebounced();
         return true;
     }
@@ -66,7 +72,7 @@ public sealed class ManagedStorageSettingsCoordinator : IManagedStorageSettings
     public bool SetManagedDragOutAction(string? action)
     {
         ThrowIfStopped();
-        string normalized = NormalizeDragOutAction(action);
+        string normalized = NormalizeDropAction(action);
         FileWidgetSettingsSlice fileWidget = _settings.Settings.FileWidget;
         if (string.Equals(
                 fileWidget.ManagedDragOutAction,
@@ -91,6 +97,11 @@ public sealed class ManagedStorageSettingsCoordinator : IManagedStorageSettings
         }
 
         fileWidget.DragOutModifierTipEnabled = enabled;
+        if (enabled)
+        {
+            DesktopToastHudService.ClearDismissedHints(_settings.DataDirectoryPath);
+        }
+
         _settings.SaveDebounced();
         return true;
     }
@@ -105,6 +116,11 @@ public sealed class ManagedStorageSettingsCoordinator : IManagedStorageSettings
         }
 
         fileWidget.DragOutResultHintEnabled = enabled;
+        if (enabled)
+        {
+            DesktopToastHudService.ClearDismissedHints(_settings.DataDirectoryPath);
+        }
+
         _settings.SaveDebounced();
         return true;
     }
@@ -114,16 +130,6 @@ public sealed class ManagedStorageSettingsCoordinator : IManagedStorageSettings
         ManagedDropActions.Copy => ManagedDropActions.Copy,
         ManagedDropActions.FollowWindows => ManagedDropActions.FollowWindows,
         _ => ManagedDropActions.Move
-    };
-
-    // Drag-out falls back to FollowWindows, not Move: advertising no
-    // preferred effect keeps the receiver's native default and never hands
-    // a third-party target the token that lets it remove the source.
-    private static string NormalizeDragOutAction(string? action) => action switch
-    {
-        ManagedDropActions.Copy => ManagedDropActions.Copy,
-        ManagedDropActions.Move => ManagedDropActions.Move,
-        _ => ManagedDropActions.FollowWindows
     };
 
     private void ThrowIfStopped() => ObjectDisposedException.ThrowIf(_stopped, this);

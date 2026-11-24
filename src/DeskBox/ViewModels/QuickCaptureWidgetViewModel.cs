@@ -33,7 +33,6 @@ public sealed partial class QuickCaptureWidgetViewModel : ObservableObject, IDis
     private bool _showTabBar = true;
     private bool _showRecordsTab = true;
     private bool _showPinnedTab = true;
-    private bool _showRecentTab = true;
     private double _widgetOpacity;
     private double _textSize;
     private double _contentTextSize;
@@ -43,7 +42,6 @@ public sealed partial class QuickCaptureWidgetViewModel : ObservableObject, IDis
     private Visibility _listVisibility = Visibility.Visible;
     private int _recordCount;
     private int _pinnedCount;
-    private int _recentCount;
     private string _emptyStateTitle = string.Empty;
     private string _emptyStateText = string.Empty;
     private bool _isSwitchingView;
@@ -53,6 +51,7 @@ public sealed partial class QuickCaptureWidgetViewModel : ObservableObject, IDis
     private int _windowRefreshDirty;
     private int _visibleItemsRefreshGeneration;
     private QuickCaptureStoreData? _cachedData;
+    private object[]? _cachedVisibleItemsSource;
     private readonly Dictionary<string, QuickCaptureItemViewModel> _itemViewModelCache = new(StringComparer.Ordinal);
 
     public ObservableCollection<QuickCaptureItemViewModel> Items { get; } = [];
@@ -60,7 +59,7 @@ public sealed partial class QuickCaptureWidgetViewModel : ObservableObject, IDis
     // ItemsControl.ItemsSource is object-valued at the WinRT ABI boundary.
     // Keep the typed collection for product logic and project a concrete
     // object array for runtime Binding in Native AOT builds.
-    public object[] VisibleItemsSource => Items.Cast<object>().ToArray();
+    public object[] VisibleItemsSource => _cachedVisibleItemsSource ??= Items.Cast<object>().ToArray();
 
     public WidgetConfig Config { get; }
 
@@ -148,8 +147,6 @@ public sealed partial class QuickCaptureWidgetViewModel : ObservableObject, IDis
                 OnPropertyChanged(nameof(SearchBoxVisibility));
                 OnPropertyChanged(nameof(SearchButtonVisibility));
                 OnPropertyChanged(nameof(SearchScopeVisibility));
-                OnPropertyChanged(nameof(RecentCaptureStatusVisibility));
-                OnPropertyChanged(nameof(RecentCaptureActionVisibility));
                 ScheduleVisibleItemsRefresh();
             }
         }
@@ -204,6 +201,18 @@ public sealed partial class QuickCaptureWidgetViewModel : ObservableObject, IDis
 
     public string DetailPinText => _localizationService.T("QuickCapture.Pin");
 
+    public string DetailPopoutText
+    {
+        get
+        {
+            string openWindow = _localizationService.T("QuickCapture.Menu.OpenWindow");
+            return !string.IsNullOrWhiteSpace(openWindow) &&
+                   !string.Equals(openWindow, "QuickCapture.Menu.OpenWindow", StringComparison.Ordinal)
+                ? openWindow
+                : _localizationService.T("QuickCapture.Popout");
+        }
+    }
+
     public string DetailCopyImageText => _localizationService.T("QuickCapture.Detail.CopyImage");
 
     public string DetailReplaceImageText => _localizationService.T("QuickCapture.Detail.ReplaceImage");
@@ -233,7 +242,7 @@ public sealed partial class QuickCaptureWidgetViewModel : ObservableObject, IDis
     public string MaterialBlueText => _localizationService.T("QuickCapture.Material.Blue");
 
     public Visibility InputAreaVisibility =>
-        (IsRecordsView || IsPinnedView) && !IsSearchExpanded
+        !IsSearchExpanded
             ? Visibility.Visible
             : Visibility.Collapsed;
 
@@ -259,10 +268,7 @@ public sealed partial class QuickCaptureWidgetViewModel : ObservableObject, IDis
             ScheduleCurrentViewSave();
             OnPropertyChanged(nameof(IsRecordsView));
             OnPropertyChanged(nameof(IsPinnedView));
-            OnPropertyChanged(nameof(IsRecentView));
             OnPropertyChanged(nameof(InputAreaVisibility));
-            OnPropertyChanged(nameof(RecentCaptureStatusVisibility));
-            OnPropertyChanged(nameof(RecentCaptureActionVisibility));
             ScheduleViewSwitchRefresh();
         }
     }
@@ -270,8 +276,6 @@ public sealed partial class QuickCaptureWidgetViewModel : ObservableObject, IDis
     public bool IsRecordsView => SelectedView == QuickCaptureViewMode.Records;
 
     public bool IsPinnedView => SelectedView == QuickCaptureViewMode.Pinned;
-
-    public bool IsRecentView => SelectedView == QuickCaptureViewMode.Recent;
 
     public Visibility TabBarVisibility => _showTabBar && !IsSearchExpanded
         ? Visibility.Visible
@@ -281,9 +285,7 @@ public sealed partial class QuickCaptureWidgetViewModel : ObservableObject, IDis
 
     public Visibility PinnedTabVisibility => _showPinnedTab ? Visibility.Visible : Visibility.Collapsed;
 
-    public Visibility RecentTabVisibility => _showRecentTab ? Visibility.Visible : Visibility.Collapsed;
-
-    public int VisibleTabCount => (_showRecordsTab ? 1 : 0) + (_showPinnedTab ? 1 : 0) + (_showRecentTab ? 1 : 0);
+    public int VisibleTabCount => (_showRecordsTab ? 1 : 0) + (_showPinnedTab ? 1 : 0);
 
     public string TabStyle
     {
@@ -309,6 +311,7 @@ public sealed partial class QuickCaptureWidgetViewModel : ObservableObject, IDis
                 OnPropertyChanged(nameof(DetailHeaderTextSize));
                 OnPropertyChanged(nameof(CaptionTextSize));
                 OnPropertyChanged(nameof(SegmentTextSize));
+                OnPropertyChanged(nameof(SegmentCountTextSize));
                 OnPropertyChanged(nameof(SegmentHeight));
                 OnPropertyChanged(nameof(SegmentPadding));
                 OnPropertyChanged(nameof(InputHeight));
@@ -374,6 +377,8 @@ public sealed partial class QuickCaptureWidgetViewModel : ObservableObject, IDis
 
     public double SegmentTextSize => WidgetSegmentedMetrics.Create(TextSize).TextSize;
 
+    public double SegmentCountTextSize => Math.Max(10, SegmentTextSize - 1.5);
+
     public double SegmentHeight => WidgetSegmentedMetrics.Create(TextSize).Height;
 
     public Thickness SegmentPadding => WidgetSegmentedMetrics.Create(TextSize).Padding;
@@ -389,10 +394,10 @@ public sealed partial class QuickCaptureWidgetViewModel : ObservableObject, IDis
     public Thickness InputPadding => WidgetInputMetrics.Create(TextSize).Padding;
 
     public Thickness RootPadding => new(
-        DensityMetric(8, 10, 14),
-        DensityMetric(4, 6, 9),
-        DensityMetric(4, 6, 9),
-        DensityMetric(6, 8, 12));
+        DensityMetric(8, 10, 12),
+        DensityMetric(6, 8, 10),
+        DensityMetric(8, 10, 12),
+        DensityMetric(6, 8, 10));
 
     public Thickness DetailPageMargin => new(0, 6 - RootPadding.Top, 0, 0);
 
@@ -486,50 +491,24 @@ public sealed partial class QuickCaptureWidgetViewModel : ObservableObject, IDis
         private set => SetProperty(ref _pinnedCount, value);
     }
 
-    public int RecentCount
-    {
-        get => _recentCount;
-        private set => SetProperty(ref _recentCount, value);
-    }
+    private string ExtractTabLabel(string key) =>
+        _localizationService.Format(key, string.Empty).Trim();
 
-    public string RecordsTabText => _localizationService.Format("QuickCapture.Tab.Records", RecordCount);
+    public string RecordsTabLabelText => ExtractTabLabel("QuickCapture.Tab.Records");
 
-    public string PinnedTabText => _localizationService.Format("QuickCapture.Tab.Pinned", PinnedCount);
+    public string PinnedTabLabelText => ExtractTabLabel("QuickCapture.Tab.Pinned");
 
-    public string RecentTabText => _localizationService.Format("QuickCapture.Tab.Recent", RecentCount);
+    public Visibility RecordsTabCountVisibility => RecordCount > 0 ? Visibility.Visible : Visibility.Collapsed;
 
-    public string EnableRecentCaptureText => _localizationService.T("QuickCapture.EnableRecentCapture");
+    public Visibility PinnedTabCountVisibility => PinnedCount > 0 ? Visibility.Visible : Visibility.Collapsed;
 
-    public string RecentCaptureStatusText
-    {
-        get
-        {
-            var settings = _settingsService.Settings;
-            if (!settings.QuickCaptureEnabled)
-            {
-                return _localizationService.T("QuickCapture.RecentStatus.FeatureOff");
-            }
+    public string RecordsTabText => RecordCount > 0
+        ? _localizationService.Format("QuickCapture.Tab.Records", RecordCount)
+        : RecordsTabLabelText;
 
-            if (!settings.QuickCaptureClipboardEnabled)
-            {
-                return _localizationService.T("QuickCapture.RecentStatus.Off");
-            }
-
-            return settings.QuickCaptureImageClipboardEnabled
-                ? _localizationService.T("QuickCapture.RecentStatus.OnWithImages")
-                : _localizationService.T("QuickCapture.RecentStatus.On");
-        }
-    }
-
-    public Visibility RecentCaptureStatusVisibility => Visibility.Collapsed;
-
-    public Visibility RecentCaptureActionVisibility =>
-        SelectedView == QuickCaptureViewMode.Recent &&
-        !HasSearchText &&
-        Items.Count == 0 &&
-        !IsRecentCaptureEnabled()
-            ? Visibility.Visible
-            : Visibility.Collapsed;
+    public string PinnedTabText => PinnedCount > 0
+        ? _localizationService.Format("QuickCapture.Tab.Pinned", PinnedCount)
+        : PinnedTabLabelText;
 
     public string EmptyStateTitle
     {
@@ -584,12 +563,35 @@ public sealed partial class QuickCaptureWidgetViewModel : ObservableObject, IDis
         RefreshVisibleItemsImmediately();
     }
 
+    internal void ReleaseAttachmentThumbnails()
+    {
+        _cachedData = null;
+        HashSet<string> activeIds = Items
+            .Select(item => item.Id)
+            .ToHashSet(StringComparer.Ordinal);
+        foreach (QuickCaptureItemViewModel item in Items)
+        {
+            item.ReleaseAttachmentThumbnails();
+        }
+
+        foreach ((string cachedId, QuickCaptureItemViewModel cached) in _itemViewModelCache.ToArray())
+        {
+            cached.ReleaseAttachmentThumbnails();
+            if (!activeIds.Contains(cachedId))
+            {
+                _itemViewModelCache.Remove(cachedId);
+            }
+        }
+    }
+
     public void Dispose()
     {
         if (_isDisposed)
         {
             return;
         }
+
+        ReleaseAttachmentThumbnails();
 
         _isDisposed = true;
         System.Threading.Interlocked.Increment(ref _visibleItemsRefreshGeneration);

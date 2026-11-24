@@ -175,10 +175,23 @@ public sealed partial class FeatureWidgetsSettingsViewModel : ObservableObject
     {
         _cachedFolderOpenBehaviorNames = null;
         _cachedAttachmentStorageModeNames = null;
-        OnPropertyChanged(nameof(AvailableFolderOpenBehaviorOptions));
-        OnPropertyChanged(nameof(AvailableFolderOpenBehaviorOptionItems));
-        OnPropertyChanged(nameof(FolderOpenBehavior));
-        OnPropertyChanged(nameof(AvailableAttachmentStorageModeOptions));
+        string prevFolder = FolderOpenBehavior;
+        string prevAttach = AttachmentStorageMode;
+        _isSyncingPresentation = true;
+        try
+        {
+            OnPropertyChanged(nameof(AvailableFolderOpenBehaviorOptions));
+            OnPropertyChanged(nameof(AvailableFolderOpenBehaviorOptionItems));
+            OnPropertyChanged(nameof(AvailableAttachmentStorageModeOptions));
+            FolderOpenBehavior = prevFolder;
+            AttachmentStorageMode = prevAttach;
+            OnPropertyChanged(nameof(FolderOpenBehavior));
+            OnPropertyChanged(nameof(AttachmentStorageMode));
+        }
+        finally
+        {
+            _isSyncingPresentation = false;
+        }
     }
 
     public void SetFeatureWidgetEnabled(WidgetKind kind, bool enabled) =>
@@ -210,9 +223,6 @@ public sealed partial class FeatureWidgetsSettingsViewModel : ObservableObject
 
     public bool SetWeatherSkin(string? skin) =>
         _settings.SetWeatherSkin(skin);
-
-    public bool SetWeatherIconStyle(string? style) =>
-        _settings.SetWeatherIconStyle(style);
 
     public bool SetWeatherDataSource(string? source) =>
         _settings.SetWeatherDataSource(source);

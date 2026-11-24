@@ -1,7 +1,10 @@
 using System.Diagnostics;
+using DeskBox.Helpers;
+using DeskBox.Platform;
 using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Windows.UI.ViewManagement;
 
@@ -28,8 +31,12 @@ public static class WindowsCompatibilityService
     {
         try
         {
+            window.SetTitleBar(null);
             window.ExtendsContentIntoTitleBar = false;
-            appWindow?.TitleBar.ResetToDefault();
+            if (appWindow is not null && AppWindowTitleBar.IsCustomizationSupported())
+            {
+                appWindow.TitleBar.ResetToDefault();
+            }
         }
         catch (Exception ex)
         {
@@ -68,6 +75,13 @@ public static class WindowsCompatibilityService
     /// </summary>
     public static event Action? AdvancedEffectsEnabledChanged;
 
+    /// <summary>
+    /// Raised when Windows High Contrast mode is toggled on or off. Callbacks
+    /// may arrive off the UI thread; visual consumers must marshal back to
+    /// their window's dispatcher before mutating XAML or backdrop state.
+    /// </summary>
+    public static event Action? HighContrastChanged;
+
     public static int OsBuild => s_osBuild.Value;
 
     public static bool IsWindows11OrLater => OsBuild >= Windows11Build;
@@ -76,6 +90,8 @@ public static class WindowsCompatibilityService
 
     public static bool SupportsNativeWindowCorners => IsWindows11OrLater;
 
+    public static bool SupportsWidgetCorners => true;
+
     public static bool SupportsMica => IsWindows11OrLater && IsSupported(() => MicaController.IsSupported());
 
     public static bool SupportsDesktopAcrylic =>
@@ -83,16 +99,18 @@ public static class WindowsCompatibilityService
 
     public static bool UsesLegacyWindowAcrylic => !IsWindows11OrLater;
 
+    public static bool IsSoftwareOrRemoteGraphicsSession =>
+        Win32Helper.GetSystemMetrics(Win32Helper.SM_REMOTESESSION) != 0 ||
+        CustomWidgetNativeMetrics.IsPrimaryAdapterSoftwareOrSynthetic();
+
     public static string ResolveWidgetMaterialType(string? requestedMaterialType)
     {
         return ResolveWidgetMaterialTypeForBuild(requestedMaterialType, OsBuild);
     }
 
     /// <summary>
-    /// Resolves the corner preference that can actually be rendered on the
-    /// current platform. The persisted setting remains the user's requested
-    /// value so a Win10 profile can regain its preference after moving to
-    /// Windows 11.
+    /// Resolves the corner preference rendered by widget and popup XAML/backdrop
+    /// surfaces on the current platform (supported on Windows 10 19041+ and Windows 11).
     /// </summary>
     public static string ResolveEffectiveWidgetCornerPreference(string? requestedPreference)
     {
@@ -103,22 +121,19 @@ public static class WindowsCompatibilityService
         string? requestedPreference,
         int osBuild)
     {
-        string normalized = requestedPreference is
+        _ = osBuild;
+        return requestedPreference is
             SettingsService.WidgetCornerPreferenceSquare or
             SettingsService.WidgetCornerPreferenceSmall or
-            SettingsService.WidgetCornerPreferenceRound
+            SettingsService.WidgetCornerPreferenceRound or
+            SettingsService.WidgetCornerPreferenceLarge
                 ? requestedPreference
                 : SettingsService.WidgetCornerPreferenceRound;
-
-        return osBuild < Windows11Build
-            ? SettingsService.WidgetCornerPreferenceSquare
-            : normalized;
     }
 
     /// <summary>
-    /// Resolves the compact media corner mode that can actually be rendered
-    /// on the current platform. Win10 keeps all capsule media surfaces square,
-    /// while Win11 continues to honor the explicit media preference.
+    /// Resolves the compact media corner mode rendered on the current platform
+    /// (supported on Windows 10 19041+ and Windows 11).
     /// </summary>
     public static string ResolveEffectiveWidgetCompactMediaCornerMode(string? requestedMode)
     {
@@ -129,10 +144,8 @@ public static class WindowsCompatibilityService
         string? requestedMode,
         int osBuild)
     {
-        string normalized = SettingsService.NormalizeWidgetCompactMediaCornerMode(requestedMode);
-        return osBuild < Windows11Build
-            ? SettingsService.WidgetCompactMediaCornerSquare
-            : normalized;
+        _ = osBuild;
+        return SettingsService.NormalizeWidgetCompactMediaCornerMode(requestedMode);
     }
 
     internal static string ResolveWidgetMaterialTypeForBuild(
@@ -187,7 +200,113 @@ public static class WindowsCompatibilityService
         }
 
         window.SystemBackdrop = null;
+        ApplySolidRootSurfaceFallback(window);
         return "Solid";
+    }
+
+    /// <summary>
+    /// Applies the unified settings-shell backdrop: standard <see cref="MicaKind.Base"/>
+    /// on Windows 11 (matching Windows Settings so cards sit directly on the base
+    /// Mica canvas without a secondary content layer), falling back directly to the
+    /// themed solid surface (<c>#F3F3F3</c>/<c>#202020</c> or system contrast color)
+    /// when Mica is unavailable (Windows 10) or high contrast is active.
+    /// </summary>
+    public static string ApplySettingsBackdrop(Window window)
+    {
+        ArgumentNullException.ThrowIfNull(window);
+        string kind = ResolveSettingsBackdropKind(SupportsMica, IsHighContrast);
+        if (kind == "Mica")
+        {
+            try
+            {
+                if (window.SystemBackdrop is not MicaBackdrop)
+                {
+                    window.SystemBackdrop = new MicaBackdrop { Kind = MicaKind.Base };
+                }
+
+                if (window.Content is Panel micaRoot)
+                {
+                    micaRoot.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+                }
+
+                return "Mica";
+            }
+            catch (Exception ex)
+            {
+                App.LogVerbose($"[Backdrop] Settings Mica unavailable: {ex.Message}");
+            }
+        }
+
+        window.SystemBackdrop = null;
+        if (window.Content is Panel rootPanel)
+        {
+            rootPanel.Background = CreateSolidThemeBackgroundBrush(rootPanel);
+        }
+
+        return "Solid";
+    }
+
+    internal static string ResolveSettingsBackdropKind(
+        bool supportsMica,
+        bool isHighContrast) =>
+        supportsMica && !isHighContrast ? "Mica" : "Solid";
+
+    private static void ApplySolidRootSurfaceFallback(Window window)
+    {
+        try
+        {
+            if (window.Content is not Panel rootPanel)
+            {
+                return;
+            }
+
+            bool needsFallback = rootPanel.Background is null ||
+                (rootPanel.Background is SolidColorBrush solid && solid.Color.A == 0);
+            if (!needsFallback)
+            {
+                return;
+            }
+
+            rootPanel.Background = CreateSolidThemeBackgroundBrush(rootPanel);
+            Windows.Foundation.TypedEventHandler<FrameworkElement, object> themeChangedHandler = static (sender, _) =>
+            {
+                if (sender is Panel panel)
+                {
+                    panel.Background = CreateSolidThemeBackgroundBrush(panel);
+                }
+            };
+            rootPanel.ActualThemeChanged += themeChangedHandler;
+
+            Windows.Foundation.TypedEventHandler<object, WindowEventArgs>? closedHandler = null;
+            closedHandler = (sender, _) =>
+            {
+                rootPanel.ActualThemeChanged -= themeChangedHandler;
+                if (sender is Window closingWindow && closedHandler is not null)
+                {
+                    closingWindow.Closed -= closedHandler;
+                }
+            };
+            window.Closed += closedHandler;
+        }
+        catch (Exception ex)
+        {
+            App.LogVerbose($"[Backdrop] Solid fallback brush apply skipped: {ex.Message}");
+        }
+    }
+
+    internal static Windows.UI.Color ResolveSolidSettingsFallbackColor(
+        bool isDark,
+        bool isHighContrast) =>
+        isHighContrast
+            ? ResolveHighContrastBackgroundColor(isDark)
+            : isDark
+                ? Windows.UI.Color.FromArgb(255, 32, 32, 32)
+                : Windows.UI.Color.FromArgb(255, 243, 243, 243);
+
+    private static SolidColorBrush CreateSolidThemeBackgroundBrush(Panel rootPanel)
+    {
+        bool isDark = NeutralInteractionBrush.IsDarkTheme(rootPanel);
+        return new SolidColorBrush(ResolveSolidSettingsFallbackColor(isDark, IsHighContrast));
     }
 
     /// <summary>
@@ -282,6 +401,18 @@ public static class WindowsCompatibilityService
         }
     }
 
+    public static Windows.UI.Color ResolveHighContrastBackgroundColor(bool isDark) =>
+        TryGetUiColor(Windows.UI.ViewManagement.UIColorType.Background)
+        ?? (isDark
+            ? Windows.UI.Color.FromArgb(0xFF, 0x20, 0x20, 0x20)
+            : Windows.UI.Color.FromArgb(0xFF, 0xF3, 0xF3, 0xF3));
+
+    public static Windows.UI.Color ResolveHighContrastForegroundColor(bool isDark) =>
+        TryGetUiColor(Windows.UI.ViewManagement.UIColorType.Foreground)
+        ?? (isDark
+            ? Windows.UI.Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF)
+            : Windows.UI.Color.FromArgb(0xFF, 0x00, 0x00, 0x00));
+
     public static bool ShouldAnimate
     {
         get
@@ -327,6 +458,16 @@ public static class WindowsCompatibilityService
         bool highContrast)
     {
         return animationsEnabled && advancedEffectsEnabled && !highContrast;
+    }
+
+    public static bool ShouldAnimateContinuousMedia =>
+        ResolveShouldAnimateContinuousMedia(AreAnimationsEnabled, IsHighContrast);
+
+    internal static bool ResolveShouldAnimateContinuousMedia(
+        bool animationsEnabled,
+        bool highContrast)
+    {
+        return animationsEnabled && !highContrast;
     }
 
     private static int GetOsBuild()
@@ -446,8 +587,11 @@ public static class WindowsCompatibilityService
 
     private static void AccessibilitySettings_Changed(
         AccessibilitySettings sender,
-        object args) =>
+        object args)
+    {
         InvalidateAnimationCapabilityCache();
+        HighContrastChanged?.Invoke();
+    }
 
     private static void InvalidateAnimationCapabilityCache() =>
         Volatile.Write(ref s_cachedShouldAnimate, -1);
