@@ -338,12 +338,6 @@ public static partial class Win32Helper
     [LibraryImport("user32.dll", SetLastError = true)]
     public static partial IntPtr SetFocus(IntPtr hWnd);
 
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    public static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
-
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    public static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
-
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool IsWindowVisible(IntPtr hWnd);

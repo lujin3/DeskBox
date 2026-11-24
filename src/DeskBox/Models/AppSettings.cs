@@ -72,7 +72,6 @@ public sealed class AppSettings
     public SearchSettingsSlice Search { get; } = new();
 
     [JsonIgnore]
-    [JsonIgnore]
     public ClipboardSettingsSlice Clipboard { get; } = new();
 
     [JsonIgnore]
