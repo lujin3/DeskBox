@@ -216,12 +216,12 @@ public partial class App
             () => RunTraySettingsActionAsync(OpenSettingsFromTray),
             () => RunTrayMenuActionAsync(ExitApplication),
             () => RunTraySettingsActionAsync(OpenGlobalSearchFromTray),
-            onToggleEyeRest: RunTrayMenuActionAsync(ToggleEyeRestFromTrayAsync),
+            onToggleEyeRest: () => RunTrayMenuActionAsync(ToggleEyeRestFromTrayAsync),
             eyeRestToggleText: LocalizationService.T(
                 eyeRestEnabled ? "Tray.EyeRest.ToggleOn" : "Tray.EyeRest.ToggleOff"),
-            onEyeRestBreakNow: RunTrayMenuActionAsync(BreakNowFromTray),
+            onEyeRestBreakNow: () => RunTrayMenuActionAsync(BreakNowFromTray),
             eyeRestBreakNowEnabled: eyeRestEnabled && !EyeRestOverlay.AnyActive,
-            onToggleSystemProxy: RunTrayMenuActionAsync(ToggleSystemProxyFromTrayAsync),
+            onToggleSystemProxy: () => RunTrayMenuActionAsync(ToggleSystemProxyFromTrayAsync),
             systemProxyToggleText: LocalizationService.T(
                 SystemProxyService.Read().Enabled
                     ? "Tray.SystemProxy.ToggleOn"

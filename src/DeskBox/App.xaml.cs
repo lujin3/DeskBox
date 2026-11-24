@@ -3433,33 +3433,18 @@ public partial class App : Application
 
         string title = LocalizationService.T("EyeRest.Notification.LongBreakTitle");
         string message = LocalizationService.T("EyeRest.Notification.LongBreakBody");
+        // Native toast only: the H.NotifyIcon balloon fallback was retired
+        // with the XAML tray (the native tray host carries no balloon API);
+        // a failed or unavailable notification service simply drops the
+        // preview, which is a best-effort courtesy anyway.
         if (_nativeNotificationService?.TryShow(
                 title,
                 message,
                 options: new NativeAppNotificationOptions(
                     EyeRestPreviewNotificationTag,
-                    EyeRestPreviewNotificationGroup)) == true ||
-            _trayIcon is null)
+                    EyeRestPreviewNotificationGroup)) != true)
         {
-            return;
-        }
-
-        try
-        {
-            _trayIcon.ShowNotification(
-                title,
-                message,
-                NotificationIcon.Info,
-                customIconHandle: null,
-                largeIcon: false,
-                sound: false,
-                respectQuietTime: true,
-                realtime: false,
-                timeout: TimeSpan.FromSeconds(4));
-        }
-        catch (Exception ex)
-        {
-            Log($"[EyeRest] Long break preview notification failed: {ex.Message}");
+            Log("[EyeRest] Long break preview notification not shown (native toast unavailable).");
         }
     }
 
